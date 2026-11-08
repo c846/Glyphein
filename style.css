@@ -1,0 +1,283 @@
+:root {
+  /* US Letter with 1in margins */
+  --page-width: 8.5in;
+  --page-height: 11in;
+  --margin: 1in;
+  --page-gap: 24px;
+  --desk-color: #e5e5e5;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--desk-color);
+}
+
+#toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: white;
+  border-bottom: 1px solid black;
+}
+
+#toolbar select,
+#toolbar input,
+#toolbar button {
+  height: 26px;
+  box-sizing: border-box;
+  background: white;
+  color: black;
+  border: 1px solid black;
+  border-radius: 0;
+  font: 13px sans-serif;
+}
+
+#font {
+  width: 200px;
+}
+
+#size {
+  width: 70px;
+}
+
+#toolbar button {
+  min-width: 26px;
+  padding: 0 6px;
+}
+
+#toolbar button[aria-pressed='true'] {
+  background: black;
+  color: white;
+}
+
+#toolbar button:disabled {
+  color: #999;
+  border-color: #999;
+}
+
+#dimensions,
+#message {
+  border: 1px solid black;
+  font: 13px sans-serif;
+}
+
+#bullet-menu {
+  position: fixed;
+  z-index: 10;
+  width: 260px;
+  padding: 6px;
+  background: white;
+  border: 1px solid black;
+  font: 13px sans-serif;
+}
+
+#bullet-symbols {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+#bullet-menu button,
+#bullet-menu input {
+  height: 26px;
+  box-sizing: border-box;
+  background: white;
+  color: black;
+  border: 1px solid black;
+  border-radius: 0;
+  font: 13px sans-serif;
+}
+
+#bullet-symbols button {
+  padding: 0;
+  font: 16px 'Segoe UI Symbol', sans-serif;
+}
+
+#bullet-symbols button[aria-pressed='true'] {
+  background: black;
+  color: white;
+}
+
+#bullet-custom-form {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+#bullet-custom {
+  flex: 1;
+  min-width: 0;
+}
+
+#bullet-default {
+  width: 100%;
+}
+
+#dimensions input {
+  width: 60px;
+}
+
+/* The scrolling area, so the toolbar stays put and never covers the cursor. */
+#desk {
+  flex: 1;
+  overflow: auto;
+  padding: var(--page-gap) 0;
+}
+
+/*
+  The whole document is one editable element. Each page's text area is a CSS
+  column, and column-wrap stacks those columns downward, so the browser itself
+  breaks lines across pages. The row gap spans the bottom margin of one page,
+  the space between sheets, and the top margin of the next.
+*/
+.ProseMirror {
+  box-sizing: border-box;
+  width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--margin);
+
+  column-count: 1;
+  column-height: calc(var(--page-height) - 2 * var(--margin));
+  column-wrap: wrap;
+  row-gap: calc(2 * var(--margin) + var(--page-gap));
+
+  /* Draws the sheets: one page of white, then one gap of desk, repeating. */
+  background: repeating-linear-gradient(
+    to bottom,
+    white 0,
+    white var(--page-height),
+    var(--desk-color) var(--page-height),
+    var(--desk-color) calc(var(--page-height) + var(--page-gap))
+  );
+
+  /* Keep in sync with DEFAULT_FONT and DEFAULT_SIZE in src/renderer.js. */
+  font-family: 'Times New Roman';
+  font-size: 12pt;
+  overflow-wrap: break-word;
+  outline: none;
+}
+
+.ProseMirror p {
+  margin: 0;
+}
+
+/* Default bullets by depth, as in Word. A chosen symbol overrides these inline. */
+.ProseMirror ul {
+  margin: 0;
+  padding-left: 0.5in;
+  list-style-type: disc;
+}
+
+.ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+.ProseMirror ul ul ul {
+  list-style-type: square;
+}
+
+body.bullet-hover .ProseMirror {
+  cursor: pointer;
+}
+
+/* Images. The container and wrapper come from TipTap's resizable node view. */
+.ProseMirror [data-resize-container] {
+  vertical-align: bottom;
+  max-width: 100%;
+}
+
+.ProseMirror [data-resize-wrapper] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ProseMirror [data-resize-wrapper] img {
+  display: block;
+  max-width: 100%;
+  /* Only the width is ever squeezed (in a narrow cell), so keep the shape. */
+  height: auto !important;
+}
+
+.ProseMirror-selectednode[data-resize-container] [data-resize-wrapper] {
+  outline: 1px solid black;
+}
+
+/* Corner handles, shown only on the selected image. */
+.ProseMirror [data-resize-handle] {
+  display: none;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  box-sizing: border-box;
+  background: white;
+  border: 1px solid black;
+}
+
+.ProseMirror-selectednode [data-resize-handle],
+[data-resize-state='true'] [data-resize-handle] {
+  display: block;
+}
+
+[data-resize-handle='top-left'],
+[data-resize-handle='bottom-right'] {
+  cursor: nwse-resize;
+}
+
+[data-resize-handle='top-right'],
+[data-resize-handle='bottom-left'] {
+  cursor: nesw-resize;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* A row moves to the next page whole, unless it's taller than a page. */
+.ProseMirror tr {
+  break-inside: avoid;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  position: relative;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid black;
+  vertical-align: top;
+  text-align: left;
+  font-weight: normal;
+  /* Text too big for its cell is cut off rather than spilling past the page. */
+  overflow: clip;
+}
+
+.ProseMirror .selectedCell {
+  background: #ccc;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 3px;
+  background: black;
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor,
+body.col-resize .ProseMirror {
+  cursor: col-resize;
+}
+
+body.row-resize .ProseMirror {
+  cursor: row-resize;
+}
