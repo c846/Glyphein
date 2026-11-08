@@ -1,25 +1,27 @@
 {
-  "name": "the-pillprocessor",
+  "name": "glyphein",
+  "productName": "Glyphein",
   "version": "1.0.0",
-  "description": "",
+  "description": "A word processor.",
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npm run build && electron .",
-    "build": "esbuild src/renderer.js --bundle --outfile=build/renderer.js"
+    "build:etymology": "node scripts/build-etymology.js",
+    "build": "esbuild src/renderer.js src/spell-worker.js --bundle --outdir=build --loader:.aff=text --loader:.dic=text"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/c846/The-Pillprocessor.git"
+    "url": "git+https://github.com/c846/Glyphein.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "c846",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/c846/The-Pillprocessor/issues"
+    "url": "https://github.com/c846/Glyphein/issues"
   },
-  "homepage": "https://github.com/c846/The-Pillprocessor#readme",
+  "homepage": "https://github.com/c846/Glyphein#readme",
   "devDependencies": {
     "electron": "^45.2.3",
     "esbuild": "^0.28.2"
@@ -34,9 +36,15 @@
     "@tiptap/extension-paragraph": "^3.33.0",
     "@tiptap/extension-table": "^3.33.0",
     "@tiptap/extension-text": "^3.33.0",
+    "@tiptap/extension-text-align": "^3.33.0",
     "@tiptap/extension-text-style": "^3.33.0",
     "@tiptap/extension-underline": "^3.33.0",
     "@tiptap/extensions": "^3.33.0",
-    "@tiptap/pm": "^3.33.0"
+    "@tiptap/pm": "^3.33.0",
+    "dictionary-en": "^4.0.0",
+    "dictionary-en-gb": "^3.0.0",
+    "fflate": "^0.8.2",
+    "nspell": "^2.1.5",
+    "wordnet-db": "^3.1.14"
   }
 }

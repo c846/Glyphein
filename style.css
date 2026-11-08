@@ -5,6 +5,63 @@
   --margin: 1in;
   --page-gap: 24px;
   --desk-color: #e5e5e5;
+  /* Where the floating toolbar ends: its 8px inset plus its 38px height. The
+     pages scroll up behind it; content starts below it. */
+  --toolbar-bottom: 46px;
+
+  /* The app's own controls and menus (not the document). Windows 11's UI font. */
+  --ui-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --radius: 4px;
+  /* The gray tint for a hovered or selected button or menu item. */
+  --hover: #ebebeb;
+  --selected: #e0e0e0;
+  --selected-hover: #d6d6d6;
+  /* Menus: slightly see-through white, lifted off the page by a soft shadow. */
+  --menu-background: rgba(255, 255, 255, 0.88);
+  --menu-shadow: 0 2px 10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  /* The outline of a text box or dropdown being typed in or chosen from. */
+  --focus: #0067c0;
+  /* Toolbar groups: one light-gray background per group, and darker tints of
+     it for a hovered or selected control inside. */
+  --group: #e3e3e3;
+  --group-hover: #d3d3d3;
+  --group-selected: #c9c9c9;
+  --group-selected-hover: #bdbdbd;
+
+  /* Motion: quick, and easing to a stop without overshooting. Things arrive
+     on --ease-out and leave on --ease-in, a little faster than they came. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --fade: 120ms; /* A control changing color when hovered. */
+  --press: 50ms; /* ...and when pressed, faster, so a click feels immediate. */
+  --open: 160ms; /* A menu or panel appearing. */
+  --close: 110ms; /* ...and going away. */
+}
+
+/* Every control fades between colors rather than snapping. */
+button,
+select,
+input,
+option {
+  transition:
+    background-color var(--fade) ease,
+    color var(--fade) ease,
+    border-color var(--fade) ease,
+    box-shadow var(--fade) ease;
+}
+
+:is(button, select, option):active {
+  transition-duration: var(--press);
+}
+
+/* In place of the browser's focus ring: the box's border turns blue, and a
+   1px line just inside it doubles its thickness without resizing the box. */
+input:focus,
+select:focus,
+select:open {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--focus);
+  border-color: var(--focus) !important;
 }
 
 html,
@@ -19,32 +76,173 @@ body {
   background: var(--desk-color);
 }
 
+/* The bar floats: inset from the window's edges, rounded, with a soft shadow.
+   Its corner radius is its groups' radius plus its padding, so the curves nest. */
+/* It hovers over the pages, which scroll up behind it and show around its
+   edges and, softly blurred, through it. */
 #toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5; /* Above the pages and the text cursor; below menus. */
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   padding: 4px;
-  background: white;
-  border-bottom: 1px solid black;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow: var(--menu-shadow);
 }
 
+/* A section of the toolbar: its controls share one rounded gray background. */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--group);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+/* Controls have no outline or background of their own; a gray tint shows one
+   that's hovered or on. The border stays, invisible, so focus can turn it blue
+   without anything changing size. */
 #toolbar select,
 #toolbar input,
 #toolbar button {
   height: 26px;
   box-sizing: border-box;
-  background: white;
+  background: transparent;
   color: black;
-  border: 1px solid black;
-  border-radius: 0;
-  font: 13px sans-serif;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+/* A box being typed in turns white, so it reads as a text field. */
+#toolbar input:focus,
+#toolbar select:open,
+#toolbar select:open:hover {
+  background: white;
 }
 
 #font {
   width: 200px;
 }
 
+/* The font and language lists are stylable dropdowns (Chromium's base-select), so they can
+   match the app's other menus and highlight in gray instead of system blue. */
+:is(#font, #language, #line-spacing),
+:is(#font, #language, #line-spacing)::picker(select) {
+  appearance: base-select;
+}
+
+:is(#font, #language, #line-spacing) {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+/* No arrow: each box opens its list when clicked. */
+:is(#font, #language, #line-spacing)::picker-icon {
+  display: none;
+}
+
+:is(#font, #language, #line-spacing)::picker(select) {
+  max-height: 60vh;
+  /* The gap from its box, as for the toolbar menus (DROPDOWN_GAP in src/menus.js). */
+  margin: 4px 0;
+  padding: 4px 0;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--menu-background);
+  box-shadow: var(--menu-shadow);
+  font: 13px var(--ui-font);
+}
+
+/* The lists extend downward from their box as they open, and fold back up as
+   they close, like the toolbar menus. The clip reaches past the edges so the
+   shadow shows once open. */
+:is(#font, #language, #line-spacing)::picker(select) {
+  clip-path: inset(0 0 100% 0);
+  opacity: 0;
+  transition:
+    clip-path var(--close) var(--ease-in),
+    opacity var(--close) var(--ease-in),
+    display var(--close) allow-discrete,
+    overlay var(--close) allow-discrete;
+}
+
+:is(#font, #language, #line-spacing):open::picker(select) {
+  clip-path: inset(-16px);
+  opacity: 1;
+  transition:
+    clip-path var(--open) var(--ease-out),
+    opacity calc(var(--open) / 2) var(--ease-out),
+    display var(--open) allow-discrete,
+    overlay var(--open) allow-discrete;
+}
+
+@starting-style {
+  :is(#font, #language, #line-spacing):open::picker(select) {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0;
+  }
+}
+
+:is(#font, #language, #line-spacing) option {
+  padding: 4px 12px 4px 8px;
+  background: transparent;
+  outline: none;
+}
+
+:is(#font, #language, #line-spacing) option:hover,
+:is(#font, #language, #line-spacing) option:focus-visible {
+  background: var(--hover);
+}
+
+:is(#font, #language, #line-spacing) option:checked {
+  background: var(--selected);
+}
+
+/* A blue dot for the current font, as in the other menus. Chromium hides it
+   on the other options. */
+:is(#font, #language, #line-spacing) option::checkmark {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--focus);
+  animation: dot-pop 260ms var(--ease-out) 60ms both;
+}
+
+:is(#font, #language, #line-spacing) option:checked:hover,
+:is(#font, #language, #line-spacing) option:checked:focus-visible {
+  background: var(--selected-hover);
+}
+
+:is(#font, #language, #line-spacing) option:active {
+  background: var(--selected-hover);
+}
+
 #size {
   width: 70px;
+}
+
+/* Only the up and down arrows: hide the arrow that opens the list of sizes.
+   The list still suggests sizes while one is typed. */
+#size::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* Keep the up and down arrows showing, not just while hovered. */
+#size::-webkit-inner-spin-button {
+  opacity: 1;
+  /* The arrows are drawn on a white square; this lets the gray show through. */
+  mix-blend-mode: multiply;
 }
 
 #toolbar button {
@@ -52,64 +250,308 @@ body {
   padding: 0 6px;
 }
 
-#toolbar button[aria-pressed='true'] {
-  background: black;
-  color: white;
+#toolbar button:hover:not(:disabled),
+#toolbar select:hover,
+#toolbar input:hover:not(:focus) {
+  background: var(--group-hover);
+}
+
+/* Pressed (bold on, say) or with its menu open. */
+#toolbar button[aria-pressed='true'],
+#toolbar button[aria-expanded='true'] {
+  background: var(--group-selected);
+}
+
+#toolbar button[aria-pressed='true']:hover,
+#toolbar button[aria-expanded='true']:hover {
+  background: var(--group-selected-hover);
+}
+
+/* Held down. */
+#toolbar button:active:not(:disabled),
+#toolbar select:active {
+  background: var(--group-selected-hover);
+}
+
+/* Pushes Alignment and Lexicon to the right-hand end. */
+#toolbar .toolbar-spacer {
+  flex: 1;
+}
+
+/* A faint line between two controls in the same group, such as font and size. */
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: #b3b3b3;
+}
+
+#alignment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#alignment .caret {
+  font-size: 10px;
+}
+
+#toolbar button.icon svg,
+.dropdown svg {
+  display: block;
+  width: 14px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 #toolbar button:disabled {
   color: #999;
-  border-color: #999;
 }
 
-#dimensions,
-#message {
-  border: 1px solid black;
-  font: 13px sans-serif;
+/* ---------- Dialogs: spacing, table size, messages ---------- */
+
+/* Float like the toolbar and lexicon: white, rounded, softly shadowed. */
+.dialog {
+  box-sizing: border-box;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 16px;
+  background: white;
+  color: black;
+  border: none;
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow: var(--menu-shadow), 0 12px 40px rgba(0, 0, 0, 0.18);
+  font: 13px var(--ui-font);
 }
 
+.dialog form {
+  margin: 0;
+}
+
+.dialog-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* A group of fields, with a small gray heading. */
+.dialog-section {
+  display: grid;
+  gap: 6px;
+}
+
+.dialog-section + .dialog-section {
+  margin-top: 14px;
+}
+
+.dialog-section[hidden] {
+  display: none;
+}
+
+.dialog-section h3 {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+/* Label, box, unit: the same three columns in every row, so the boxes and
+   units line up down the dialog. */
+.field {
+  display: grid;
+  grid-template-columns: 1fr 96px 16px;
+  align-items: center;
+  gap: 8px;
+}
+
+.field .unit {
+  color: #555;
+}
+
+/* Boxes match the toolbar's: gray, no outline, darker when hovered, white
+   with a thin blue border while being typed in. */
+.dialog :is(input, select) {
+  width: 100%;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  background: var(--group);
+  color: black;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+.dialog :is(input, select):hover:not(:focus) {
+  background: var(--group-hover);
+}
+
+.dialog input:focus,
+.dialog select:open {
+  background: white;
+}
+
+/* The up and down arrows, always showing, tinted to the box. */
+.dialog input[type='number']::-webkit-inner-spin-button {
+  opacity: 1;
+  mix-blend-mode: multiply;
+}
+
+#message-text {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.45;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.dialog-buttons button {
+  min-width: 76px;
+  height: 28px;
+  padding: 0 14px;
+  background: var(--group);
+  color: black;
+  border: none;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+.dialog-buttons button:hover {
+  background: var(--group-hover);
+}
+
+.dialog-buttons button:active {
+  background: var(--group-selected-hover);
+}
+
+/* The button Enter presses: the app's blue. */
+.dialog-buttons .primary {
+  background: var(--focus);
+  color: white;
+}
+
+.dialog-buttons .primary:hover {
+  background: #005ba9;
+}
+
+.dialog-buttons .primary:active {
+  background: #004e91;
+}
+
+.dialog-buttons button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Pop in like the right-click menu, over a lightly dimmed window, and back out. */
+.dialog {
+  transition:
+    transform var(--open) var(--ease-out),
+    opacity var(--open) var(--ease-out),
+    display var(--open) allow-discrete,
+    overlay var(--open) allow-discrete;
+}
+
+.dialog:not([open]) {
+  transform: scale(0.96);
+  opacity: 0;
+  transition-duration: var(--close);
+  transition-timing-function: var(--ease-in);
+}
+
+@starting-style {
+  .dialog[open] {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0);
+  transition:
+    background-color var(--open) ease,
+    display var(--open) allow-discrete,
+    overlay var(--open) allow-discrete;
+}
+
+.dialog[open]::backdrop {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+@starting-style {
+  .dialog[open]::backdrop {
+    background: rgba(0, 0, 0, 0);
+  }
+}
+
+/* ---------- Bullet symbol menu ---------- */
+
+/* Rounded like the toolbar, whose groups it borrows. */
 #bullet-menu {
   position: fixed;
   z-index: 10;
   width: 260px;
-  padding: 6px;
-  background: white;
-  border: 1px solid black;
-  font: 13px sans-serif;
-}
-
-#bullet-symbols {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
-  margin-bottom: 6px;
+  box-sizing: border-box;
+  padding: 4px;
+  background: var(--menu-background);
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow: var(--menu-shadow);
+  font: 13px var(--ui-font);
 }
 
 #bullet-menu button,
 #bullet-menu input {
   height: 26px;
   box-sizing: border-box;
-  background: white;
+  padding: 0 8px;
+  background: transparent;
   color: black;
-  border: 1px solid black;
-  border-radius: 0;
-  font: 13px sans-serif;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+/* The symbols sit straight on the menu, highlighted gray like menu items. */
+#bullet-symbols {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
 }
 
 #bullet-symbols button {
+  height: 28px;
   padding: 0;
-  font: 16px 'Segoe UI Symbol', sans-serif;
+  font: 16px 'Segoe UI Symbol', var(--ui-font);
+}
+
+#bullet-symbols button:hover {
+  background: var(--hover);
 }
 
 #bullet-symbols button[aria-pressed='true'] {
-  background: black;
-  color: white;
+  background: var(--selected);
 }
 
+#bullet-symbols button[aria-pressed='true']:hover,
+#bullet-symbols button:active {
+  background: var(--selected-hover);
+}
+
+/* The symbol box and its button share one gray section, like the lexicon's search. */
 #bullet-custom-form {
   display: flex;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: 2px;
+  margin: 0 0 4px;
+  padding: 2px;
+  background: var(--group);
+  border-radius: calc(var(--radius) + 2px);
 }
 
 #bullet-custom {
@@ -117,19 +559,538 @@ body {
   min-width: 0;
 }
 
-#bullet-default {
+#bullet-custom:hover:not(:focus) {
+  background: var(--group-hover);
+}
+
+#bullet-custom:focus {
+  background: white;
+}
+
+#bullet-custom::placeholder {
+  color: #6b6b6b;
+}
+
+/* Use, and Default: gray buttons on their own, as on the toolbar. */
+#bullet-custom-form button:hover,
+#bullet-menu #bullet-default:hover {
+  background: var(--group-hover);
+}
+
+#bullet-custom-form button:active,
+#bullet-menu #bullet-default:active {
+  background: var(--group-selected-hover);
+}
+
+#bullet-menu #bullet-default {
+  display: block;
   width: 100%;
+  height: 30px;
+  background: var(--group);
+  border-radius: calc(var(--radius) + 2px);
 }
 
-#dimensions input {
-  width: 60px;
+/* ---------- Reference panel: dictionary, thesaurus, spelling ---------- */
+
+/* Floats like the top bar: inset from the window, rounded, with a soft shadow. */
+#reference {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  margin: 8px;
+  margin-top: calc(var(--toolbar-bottom) + 8px); /* Below the floating toolbar. */
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow: var(--menu-shadow);
+  overflow: hidden; /* Keeps the credit line inside the rounded corners. */
+  font: 13px var(--ui-font);
 }
 
-/* The scrolling area, so the toolbar stays put and never covers the cursor. */
-#desk {
+#reference[hidden],
+#reference [hidden] {
+  display: none;
+}
+
+/* Slides in from the window's right edge, and back out. Its right margin is
+   what moves, so the page beside it glides over to make room rather than
+   jumping. -308px is its width plus its left margin: just off screen. */
+#reference {
+  transition:
+    margin-right var(--open) var(--ease-out),
+    display var(--open) allow-discrete;
+}
+
+#reference[hidden] {
+  margin-right: -308px;
+  transition:
+    margin-right var(--close) var(--ease-in),
+    display var(--close) allow-discrete;
+}
+
+@starting-style {
+  #reference:not([hidden]) {
+    margin-right: -308px;
+  }
+}
+
+/* Search results rise gently into place, one after another. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+#reference-results > * {
+  animation: rise-in 220ms var(--ease-out) both;
+}
+
+#reference-results > :nth-child(2) {
+  animation-delay: 30ms;
+}
+
+#reference-results > :nth-child(3) {
+  animation-delay: 60ms;
+}
+
+#reference-results > :nth-child(n + 4) {
+  animation-delay: 90ms;
+}
+
+/* "Looking up…" waits, so it only appears if a lookup is slow. */
+#reference-results > .loading {
+  animation-delay: 300ms;
+}
+
+/* The panel's controls look like the toolbar's: rounded, no outline, on the
+   toolbar gray, darker when hovered or on. :where keeps these easy to override. */
+#reference :where(button:not(.word-link), input, select) {
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  background: var(--group);
+  color: black;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+#reference :where(button:not(.word-link), select):hover {
+  background: var(--group-hover);
+}
+
+#reference button:not(.word-link):active,
+#reference select:active {
+  background: var(--group-selected-hover) !important;
+}
+
+/* A box being typed in turns white, as in the toolbar. */
+#reference input:focus,
+#reference select:open {
+  background: white;
+}
+
+#context-menu button {
+  box-sizing: border-box;
+}
+
+#reference-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 0;
+}
+
+/* The tabs: one gray section, the open tab darker. */
+#reference-tabs {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--group);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+#reference-tabs button {
+  flex: 1;
+  padding: 0 4px;
+  background: transparent;
+}
+
+#reference-tabs button:hover {
+  background: var(--group-hover);
+}
+
+#reference-tabs button[aria-selected='true'] {
+  background: var(--group-selected);
+}
+
+#reference-tabs button[aria-selected='true']:hover {
+  background: var(--group-selected-hover);
+}
+
+#reference #reference-close {
+  flex: none;
+  width: 30px;
+  padding: 0;
+  background: transparent;
+}
+
+#reference #reference-close:hover {
+  background: var(--group-hover);
+}
+
+/* The search box and its button share one gray section. */
+#reference-search {
+  display: flex;
+  gap: 2px;
+  margin: 6px;
+  padding: 2px;
+  background: var(--group);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+#reference-search :is(input, button) {
+  background: transparent;
+}
+
+#reference-search button:hover {
+  background: var(--group-hover);
+}
+
+#reference-query {
+  flex: 1;
+  min-width: 0;
+}
+
+#reference-results,
+#spelling-page {
   flex: 1;
   overflow: auto;
-  padding: var(--page-gap) 0;
+  padding: 0 10px 10px;
+}
+
+#reference h3 {
+  margin: 10px 0 4px;
+  font-size: 15px;
+}
+
+#reference .pos {
+  font-weight: normal;
+  font-style: italic;
+  color: #555;
+}
+
+#reference ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+#reference li {
+  margin-bottom: 6px;
+}
+
+#reference .example {
+  color: #555;
+  font-style: italic;
+}
+
+#reference .sense {
+  margin-bottom: 8px;
+}
+
+#reference .etymology h4 {
+  margin: 8px 0 2px;
+  font-size: 13px;
+}
+
+#reference .etymology p {
+  margin: 0 0 6px;
+}
+
+#reference .sense-meaning {
+  color: #555;
+  margin-bottom: 2px;
+}
+
+#reference .list-label {
+  font-weight: bold;
+}
+
+#reference .word-link {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--focus);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#reference .note {
+  color: #555;
+}
+
+#reference-credit {
+  margin: 0;
+  padding: 6px 10px;
+  border-top: 1px solid #ccc;
+  font-size: 11px;
+}
+
+#ignored-words {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#ignored-words li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+/* ---------- Menus: the right-click menu and the toolbar dropdowns ---------- */
+
+#context-menu,
+.dropdown {
+  position: fixed;
+  z-index: 10;
+  min-width: 180px;
+  padding: 4px 0;
+  background: var(--menu-background);
+  border-radius: var(--radius);
+  box-shadow: var(--menu-shadow);
+  font: 13px var(--ui-font);
+}
+
+.dropdown {
+  min-width: 200px;
+}
+
+.dropdown[hidden],
+#context-menu[hidden],
+#bullet-menu[hidden] {
+  display: none;
+  /* Not clickable while it animates away. */
+  pointer-events: none;
+}
+
+/* Toolbar menus extend downward from their button, and fold back up. The
+   clip reaches past the edges so the shadow shows once open. */
+.dropdown {
+  clip-path: inset(-16px);
+  transition:
+    clip-path var(--open) var(--ease-out),
+    opacity calc(var(--open) / 2) var(--ease-out),
+    display var(--open) allow-discrete;
+}
+
+.dropdown[hidden] {
+  clip-path: inset(0 0 100% 0);
+  opacity: 0;
+  transition:
+    clip-path var(--close) var(--ease-in),
+    opacity var(--close) var(--ease-in),
+    display var(--close) allow-discrete;
+}
+
+@starting-style {
+  .dropdown:not([hidden]) {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0;
+  }
+}
+
+/* The right-click and bullet menus pop out from the pointer (transform-origin
+   is set in src/menus.js), settling without a bounce, and pop back in. */
+#context-menu,
+#bullet-menu {
+  transition:
+    transform 130ms var(--ease-out),
+    opacity 130ms var(--ease-out),
+    display 130ms allow-discrete;
+}
+
+#context-menu[hidden],
+#bullet-menu[hidden] {
+  transform: scale(0.9);
+  opacity: 0;
+  transition:
+    transform 90ms var(--ease-in),
+    opacity 90ms var(--ease-in),
+    display 90ms allow-discrete;
+}
+
+@starting-style {
+  #context-menu:not([hidden]),
+  #bullet-menu:not([hidden]) {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+#context-menu button,
+.dropdown button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  height: auto;
+  padding: 4px 12px;
+  /* Lets the menu's see-through background show. */
+  background: transparent;
+  color: black;
+  border: none;
+  border-radius: 0;
+  font: 13px var(--ui-font);
+  text-align: left;
+}
+
+#context-menu .shortcut,
+.dropdown .shortcut {
+  color: #555;
+}
+
+#context-menu button:hover:not(:disabled),
+.dropdown button:hover {
+  background: var(--hover);
+}
+
+#context-menu button:active:not(:disabled),
+.dropdown button:active {
+  background: var(--selected);
+}
+
+#context-menu button:disabled,
+#context-menu button:disabled .shortcut {
+  color: #999;
+}
+
+/* Alignment and Lexicon items leave room for a dot beside the current one. */
+#alignment-menu button,
+#lexicon-menu button {
+  padding-left: 24px;
+}
+
+.dropdown button[aria-checked='true']::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--focus);
+  /* Pops once as the menu opens, just after it starts to extend. */
+  animation: dot-pop 260ms var(--ease-out) 60ms both;
+}
+
+@keyframes dot-pop {
+  0% {
+    transform: scale(0);
+  }
+  55% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.dropdown .item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#context-menu .suggestion {
+  font-weight: bold;
+}
+
+#context-menu .menu-label {
+  padding: 4px 12px;
+  color: #555;
+}
+
+#context-menu .heading {
+  font-weight: bold;
+  color: black;
+}
+
+#context-menu hr {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid #ccc;
+}
+
+/* A flat red line, as thick as the text cursor and a little see-through so it
+   reads softly. Set just below the text, unbroken under descenders. */
+.ProseMirror .spelling-error {
+  text-decoration: underline solid rgba(220, 20, 30, 0.55);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  text-decoration-skip-ink: none;
+}
+
+
+/* The pages, with the reference panel beside them when it's open. Clipped
+   sideways so the panel can wait just off the right edge as it slides; clip,
+   unlike hidden, can't be scrolled, and leaves the panel's shadow alone. */
+#workspace {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow-x: clip;
+}
+
+/* The scrolling area. It runs up behind the floating toolbar, so the first
+   page starts just below the toolbar. No scrollbar: the wheel, the keyboard
+   and Ctrl+Up/Down (src/pages.js) move through the pages. Positioned so the
+   text cursor (src/caret.js) can be placed within it. */
+#desk {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: calc(var(--toolbar-bottom) + var(--page-gap)) 0 var(--page-gap);
+  scrollbar-width: none;
+}
+
+/* The text cursor, drawn by src/caret.js in place of the browser's thin one.
+   Centered on where the browser's would be. It stays solid while the cursor
+   moves, then blinks with a soft fade. */
+.text-caret {
+  position: absolute;
+  z-index: 1;
+  width: 2px;
+  margin-left: -1px;
+  background: black;
+  pointer-events: none;
+}
+
+.text-caret[hidden] {
+  display: none;
+}
+
+.text-caret.blinking {
+  animation: caret-blink 1.1s ease-in-out 0.5s infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  50%,
+  90% {
+    opacity: 0;
+  }
 }
 
 /*
@@ -161,8 +1122,41 @@ body {
   /* Keep in sync with DEFAULT_FONT and DEFAULT_SIZE in src/renderer.js. */
   font-family: 'Times New Roman';
   font-size: 12pt;
+  /* "Single" line spacing. Keep in sync with SINGLE_LINE in src/spacing.js. */
+  line-height: 1.15;
   overflow-wrap: break-word;
   outline: none;
+  /* src/caret.js draws a thicker cursor instead. */
+  caret-color: transparent;
+  /* Our own I-beam mouse pointer. Windows' default one inverts what's under
+     it, and Chromium sometimes loses that after a menu has been open, drawing
+     it plain white so it vanishes on the page. This one is black with a white
+     edge, so it shows on any background. The hotspot is its middle. */
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='20' viewBox='0 0 11 20'><path d='M2.5 1.5h2a1 1 0 0 1 1 1 1 1 0 0 1 1-1h2M5.5 2.5v15M2.5 18.5h2a1 1 0 0 0 1-1 1 1 0 0 0 1 1h2' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/><path d='M2.5 1.5h2a1 1 0 0 1 1 1 1 1 0 0 1 1-1h2M5.5 2.5v15M2.5 18.5h2a1 1 0 0 0 1-1 1 1 0 0 0 1 1h2' fill='none' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+      5 10,
+    text;
+}
+
+/* Turned down to instant for anyone who has asked their system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  /* Kept as separate rules: one selector the browser doesn't know would
+     otherwise void the lot. */
+  *:not(.text-caret),
+  *::before {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
+  ::checkmark {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
+  ::picker(select) {
+    transition-duration: 0s !important;
+  }
 }
 
 .ProseMirror p {

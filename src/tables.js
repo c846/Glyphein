@@ -198,7 +198,7 @@ export function insertTable(editor, rows, cols) {
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
-function columnWidths(table, map) {
+export function columnWidths(table, map) {
   const widths = new Array(map.width).fill(null);
   for (const offset of new Set(map.map)) {
     const { left } = map.findCell(offset);

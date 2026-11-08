@@ -9,7 +9,7 @@ const MAX_HEIGHT = 860;
 const MIN_SIZE = 16;
 
 // Scales width x height down, keeping its shape, until it fits the page.
-function fitToPage(width, height) {
+export function fitToPage(width, height) {
   const scale = Math.min(1, MAX_WIDTH / width, MAX_HEIGHT / height);
   return { width: Math.round(width * scale), height: Math.round(height * scale) };
 }
@@ -75,7 +75,7 @@ function readAsDataURL(file) {
   });
 }
 
-function naturalSize(src) {
+export function naturalSize(src) {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });

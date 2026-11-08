@@ -3,13 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
-    <title>The Pillprocessor</title>
+    <title>Glyphein</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="toolbar">
-      <select id="font" title="Font"></select>
-      <input id="size" type="number" min="1" max="400" step="any" list="sizes" title="Font size" />
+      <!-- Each group sits on one shared light-gray background. -->
+      <div class="toolbar-group">
+        <button id="file" type="button" title="Open and save .odt files" aria-haspopup="menu" aria-expanded="false">File</button>
+      </div>
+      <div class="toolbar-group">
+        <select id="font" title="Font"></select>
+        <span class="toolbar-divider"></span>
+        <input id="size" type="number" min="1" max="400" step="any" list="sizes" title="Font size" />
+      </div>
       <datalist id="sizes">
         <option value="8"></option>
         <option value="8.5"></option>
@@ -27,41 +34,141 @@
         <option value="48"></option>
         <option value="72"></option>
       </datalist>
-      <button id="bold" type="button" title="Bold (Ctrl+B)"><b>B</b></button>
-      <button id="italic" type="button" title="Italic (Ctrl+I)"><i>I</i></button>
-      <button id="underline" type="button" title="Underline (Ctrl+U)"><u>U</u></button>
-      <button id="image" type="button" title="Insert image">Image</button>
+      <div class="toolbar-group">
+        <button id="bold" type="button" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button id="italic" type="button" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button id="underline" type="button" title="Underline (Ctrl+U)"><u>U</u></button>
+      </div>
+      <span class="toolbar-spacer"></span>
+      <div class="toolbar-group">
+        <!-- Shows the current alignment's icon; the icon is copied in from the menu. -->
+        <button id="alignment" class="icon" type="button" title="Alignment" aria-haspopup="menu" aria-expanded="false">
+          <span id="alignment-icon"></span><span class="caret" aria-hidden="true">▾</span>
+        </button>
+      </div>
+      <div class="toolbar-group">
+        <button id="lexicon" type="button" title="Dictionary, thesaurus and spellcheck" aria-haspopup="menu" aria-expanded="false">Lexicon</button>
+      </div>
       <input id="image-file" type="file" accept="image/*" multiple hidden />
-      <button id="table" type="button" title="Create table">Table</button>
-      <button id="split" type="button" title="Split the selected cell or cells">Split</button>
-      <button id="add-row" type="button" title="Add a row below">Add Row</button>
-      <button id="add-column" type="button" title="Add a column to the right">Add Col</button>
-      <button id="delete-table" type="button" title="Delete this table">Del Table</button>
     </div>
-    <div id="desk">
-      <div id="document"></div>
+    <div id="workspace">
+      <div id="desk">
+        <div id="document"></div>
+      </div>
+      <aside id="reference" hidden>
+        <div id="reference-header">
+          <!-- The tabs share one gray background, like a toolbar group. -->
+          <div id="reference-tabs" role="tablist">
+            <button id="tab-dictionary" type="button" role="tab">Dictionary</button>
+            <button id="tab-thesaurus" type="button" role="tab">Thesaurus</button>
+            <button id="tab-spelling" type="button" role="tab">Spelling</button>
+          </div>
+          <button id="reference-close" type="button" title="Close">✕</button>
+        </div>
+        <form id="reference-search">
+          <input id="reference-query" type="search" placeholder="Search for a word" />
+          <button>Search</button>
+        </form>
+        <div id="reference-results"></div>
+        <div id="spelling-page" hidden>
+          <p><label>Language <select id="language"></select></label></p>
+          <p><button id="next-error" type="button">Next mistake (F7)</button></p>
+          <p class="note">Right-click an underlined word for suggestions, or to ignore it.</p>
+          <h3>Ignored words</h3>
+          <p id="ignored-empty" class="note">None yet.</p>
+          <ul id="ignored-words"></ul>
+        </div>
+        <p id="reference-credit" class="note">Spelling: SCOWL Hunspell dictionaries. Definitions and synonyms: Princeton WordNet 3.1. Etymologies: Wiktionary (CC BY-SA 4.0), via Kaikki.org.</p>
+      </aside>
+    </div>
+    <div id="context-menu" hidden></div>
+    <div id="alignment-menu" class="dropdown" role="menu" hidden>
+      <button type="button" role="menuitemradio" data-action="left">
+        <span class="item-label"><svg viewBox="0 0 14 12" aria-hidden="true"><path d="M0 1h14M0 4.5h9M0 8h14M0 11.5h9" /></svg>Left</span>
+        <span class="shortcut">Ctrl+L</span>
+      </button>
+      <button type="button" role="menuitemradio" data-action="center">
+        <span class="item-label"><svg viewBox="0 0 14 12" aria-hidden="true"><path d="M0 1h14M2.5 4.5h9M0 8h14M2.5 11.5h9" /></svg>Center</span>
+        <span class="shortcut">Ctrl+E</span>
+      </button>
+      <button type="button" role="menuitemradio" data-action="right">
+        <span class="item-label"><svg viewBox="0 0 14 12" aria-hidden="true"><path d="M0 1h14M5 4.5h9M0 8h14M5 11.5h9" /></svg>Right</span>
+        <span class="shortcut">Ctrl+R</span>
+      </button>
+      <button type="button" role="menuitemradio" data-action="justify">
+        <span class="item-label"><svg viewBox="0 0 14 12" aria-hidden="true"><path d="M0 1h14M0 4.5h14M0 8h14M0 11.5h14" /></svg>Justify</span>
+        <span class="shortcut">Ctrl+J</span>
+      </button>
+    </div>
+    <div id="lexicon-menu" class="dropdown" role="menu" hidden>
+      <button type="button" role="menuitemcheckbox" data-action="dictionary">Dictionary</button>
+      <button type="button" role="menuitemcheckbox" data-action="thesaurus">Thesaurus <span class="shortcut">Shift+F7</span></button>
+      <button type="button" role="menuitemcheckbox" data-action="spelling">Spellcheck</button>
+    </div>
+    <div id="file-menu" class="dropdown" role="menu" hidden>
+      <button type="button" role="menuitem" data-action="open">Open… <span class="shortcut">Ctrl+O</span></button>
+      <button type="button" role="menuitem" data-action="save">Save <span class="shortcut">Ctrl+S</span></button>
+      <button type="button" role="menuitem" data-action="save-copy">Save copy… <span class="shortcut">Ctrl+Shift+S</span></button>
     </div>
     <div id="bullet-menu" hidden>
       <div id="bullet-symbols"></div>
       <form id="bullet-custom-form">
-        <input id="bullet-custom" placeholder="Other symbol (Win + .)" title="Type or paste any symbol, then press Enter" />
+        <input id="bullet-custom" placeholder="Use your own symbol" title="Type or paste any symbol, then press Enter" />
         <button>Use</button>
       </form>
       <button id="bullet-default" type="button">Default</button>
     </div>
-    <dialog id="dimensions">
+    <!-- Each field is one grid row: label, box, unit, so they all line up. -->
+    <dialog id="spacing-dialog" class="dialog">
       <form method="dialog">
-        <p id="dimensions-title"></p>
-        <p><label>Rows <input id="dimension-rows" type="number" min="1" step="1" required /></label></p>
-        <p><label>Columns <input id="dimension-cols" type="number" min="1" step="1" required /></label></p>
-        <button value="ok">OK</button>
-        <button value="cancel" formnovalidate>Cancel</button>
+        <h2 class="dialog-title">Spacing</h2>
+        <section class="dialog-section">
+          <h3>Selected paragraphs</h3>
+          <label class="field">
+            <span>Line spacing</span>
+            <select id="line-spacing">
+              <option value="1">Single</option>
+              <option value="1.15">1.15</option>
+              <option value="1.5">1.5</option>
+              <option value="2">Double</option>
+              <option value="2.5">2.5</option>
+              <option value="3">Triple</option>
+            </select>
+            <span class="unit"></span>
+          </label>
+          <label class="field"><span>Space before</span><input id="space-before" type="number" min="0" max="200" step="any" required /><span class="unit">pt</span></label>
+          <label class="field"><span>Space after</span><input id="space-after" type="number" min="0" max="200" step="any" required /><span class="unit">pt</span></label>
+        </section>
+        <section id="table-spacing" class="dialog-section">
+          <h3>This table</h3>
+          <label class="field"><span>Space above</span><input id="table-space-before" type="number" min="0" max="200" step="any" required /><span class="unit">pt</span></label>
+          <label class="field"><span>Space below</span><input id="table-space-after" type="number" min="0" max="200" step="any" required /><span class="unit">pt</span></label>
+        </section>
+        <div class="dialog-buttons">
+          <button value="ok" class="primary">OK</button>
+          <button value="cancel" formnovalidate>Cancel</button>
+        </div>
       </form>
     </dialog>
-    <dialog id="message">
+    <dialog id="dimensions" class="dialog">
+      <form method="dialog">
+        <h2 id="dimensions-title" class="dialog-title"></h2>
+        <section class="dialog-section">
+          <label class="field"><span>Rows</span><input id="dimension-rows" type="number" min="1" step="1" required /><span class="unit"></span></label>
+          <label class="field"><span>Columns</span><input id="dimension-cols" type="number" min="1" step="1" required /><span class="unit"></span></label>
+        </section>
+        <div class="dialog-buttons">
+          <button value="ok" class="primary">OK</button>
+          <button value="cancel" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="message" class="dialog">
       <form method="dialog">
         <p id="message-text"></p>
-        <button>OK</button>
+        <div class="dialog-buttons">
+          <button class="primary">OK</button>
+        </div>
       </form>
     </dialog>
     <script src="build/renderer.js"></script>
