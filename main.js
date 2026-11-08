@@ -38,6 +38,37 @@ if (process.platform === 'win32') app.setAppUserModelId('com.c846.glyphein');
 // No native menu: the app's menu will be built by hand.
 Menu.setApplicationMenu(null);
 
+/* ---------- Opening files from File Explorer ---------- */
+
+// One copy of the app runs at a time: opening another file (or the app again)
+// while it's running hands over to the running copy, which opens a window.
+// Two copies would fight over the saved settings.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv, workingDirectory) => {
+    createWindow(odtFileIn(argv, workingDirectory));
+  });
+}
+
+// The .odt file named on a command line, if any: double-clicking one in File
+// Explorer starts the app as `Glyphein.exe "C:...ile.odt"`.
+function odtFileIn(argv, workingDirectory = process.cwd()) {
+  const arg = argv.slice(1).find((a) => !a.startsWith('-') && /.odt$/i.test(a));
+  return arg ? path.resolve(workingDirectory, arg) : null;
+}
+
+// The file each window was opened with, until its page asks for it.
+const startingFiles = new Map();
+
+// Resolves to { path, bytes }, or null if the window was opened without one.
+ipcMain.handle('file:starting-file', async (event) => {
+  const file = startingFiles.get(event.sender.id);
+  startingFiles.delete(event.sender.id);
+  if (!file) return null;
+  return { path: file, bytes: await fs.readFile(file) };
+});
+
 ipcMain.handle('wordnet:lookup', (_event, word) => wordnet.lookup(String(word)));
 
 /* ---------- Files ---------- */
@@ -116,13 +147,22 @@ ipcMain.on('app:close', (event) => {
   win.close();
 });
 
-function createWindow() {
+// `file` is an .odt file to open in it, or null for a blank document.
+function createWindow(file = null) {
+  // Each new window sits a little down and right of the current one, so it
+  // doesn't hide it exactly.
+  const current = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows().at(-1);
+  const offset = current && !current.isMaximized() ? current.getPosition().map((n) => n + 30) : null;
+
   const win = new BrowserWindow({
     width: 1000,
     height: 800,
+    ...(offset && { x: offset[0], y: offset[1] }),
     icon: ICON,
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
+  if (file) startingFiles.set(win.webContents.id, file);
+  win.webContents.once('destroyed', () => startingFiles.delete(win.webContents.id));
   win.loadFile('index.html');
   // Read the dictionary index now, so the first lookup is instant.
   win.webContents.once('did-finish-load', () => setTimeout(wordnet.preload, 0));
@@ -138,7 +178,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.setIcon(ICON);
-  createWindow();
+  createWindow(odtFileIn(process.argv));
 
   // macOS: reopen a window when the dock icon is clicked
   app.on('activate', () => {

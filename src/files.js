@@ -77,36 +77,61 @@ export function setupFiles(editor, { defaults, showMessage }) {
     return choice === 'discard';
   }
 
+  // Shows `file` ({ path, bytes }) in place of the current document.
+  // Resolves to true if it was opened.
+  async function load(file) {
+    let content;
+    try {
+      content = await odtToDocument(file.bytes, defaults);
+      editor.schema.nodeFromJSON(content).check();
+    } catch (error) {
+      showMessage(`"${baseName(file.path)}" could not be opened. ${error.message}`);
+      return false;
+    }
+
+    editor.commands.setContent(content);
+    // A fresh start, so undo can't bring back the previous document.
+    const { state } = editor;
+    editor.view.updateState(
+      EditorState.create({ doc: state.doc, plugins: state.plugins, selection: Selection.atStart(state.doc) }),
+    );
+    filePath = file.path;
+    savedDoc = editor.state.doc;
+    // Lets the toolbar and anything else watching catch up.
+    editor.view.dispatch(editor.state.tr.setMeta('addToHistory', false).scrollIntoView());
+    update();
+    byId('desk').scrollTop = 0;
+    return true;
+  }
+
+  // File > Open, or Ctrl+O.
   async function open() {
     if (busy || !(await confirmDiscard())) return;
     busy = true;
     try {
       const file = await window.files.open();
-      if (!file) return;
-
-      let content;
-      try {
-        content = await odtToDocument(file.bytes, defaults);
-        editor.schema.nodeFromJSON(content).check();
-      } catch (error) {
-        showMessage(`"${baseName(file.path)}" could not be opened. ${error.message}`);
-        return;
-      }
-
-      editor.commands.setContent(content);
-      // A fresh start, so undo can't bring back the previous document.
-      const { state } = editor;
-      editor.view.updateState(
-        EditorState.create({ doc: state.doc, plugins: state.plugins, selection: Selection.atStart(state.doc) }),
-      );
-      filePath = file.path;
-      savedDoc = editor.state.doc;
-      // Lets the toolbar and anything else watching catch up.
-      editor.view.dispatch(editor.state.tr.setMeta('addToHistory', false).scrollIntoView());
-      update();
-      byId('desk').scrollTop = 0;
+      if (file) await load(file);
     } catch (error) {
-      showMessage(`The file could not be opened.\n\n${cleanError(error)}`);
+      showMessage(`The file could not be opened.
+
+${cleanError(error)}`);
+    } finally {
+      busy = false;
+      editor.commands.focus();
+    }
+  }
+
+  // A file this window was opened with, say by double-clicking it in File
+  // Explorer. The window is new, so there's nothing to lose by replacing.
+  async function openStartingFile() {
+    busy = true;
+    try {
+      const file = await window.files.startingFile();
+      if (file) await load(file);
+    } catch (error) {
+      showMessage(`The file could not be opened.
+
+${cleanError(error)}`);
     } finally {
       busy = false;
       editor.commands.focus();
@@ -141,6 +166,7 @@ export function setupFiles(editor, { defaults, showMessage }) {
   });
 
   update();
+  openStartingFile();
 }
 
 // Drops Electron's "Error invoking remote method ..." wrapper.

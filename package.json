@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npm run build && electron .",
     "build:etymology": "node scripts/build-etymology.js",
-    "build": "esbuild src/renderer.js src/spell-worker.js --bundle --outdir=build --loader:.aff=text --loader:.dic=text"
+    "build": "esbuild src/renderer.js src/spell-worker.js --bundle --outdir=build --loader:.aff=text --loader:.dic=text",
+    "dist": "npm run build && electron-builder --win nsis"
   },
   "repository": {
     "type": "git",
@@ -23,10 +24,6 @@
   },
   "homepage": "https://github.com/c846/Glyphein#readme",
   "devDependencies": {
-    "electron": "^45.2.3",
-    "esbuild": "^0.28.2"
-  },
-  "dependencies": {
     "@tiptap/core": "^3.33.0",
     "@tiptap/extension-bold": "^3.33.0",
     "@tiptap/extension-document": "^3.33.0",
@@ -43,8 +40,53 @@
     "@tiptap/pm": "^3.33.0",
     "dictionary-en": "^4.0.0",
     "dictionary-en-gb": "^3.0.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
     "fflate": "^0.8.2",
-    "nspell": "^2.1.5",
+    "nspell": "^2.1.5"
+  },
+  "dependencies": {
     "wordnet-db": "^3.1.14"
+  },
+  "build": {
+    "appId": "com.c846.glyphein",
+    "productName": "Glyphein",
+    "copyright": "Copyright © 2026 c846",
+    "directories": {
+      "output": "dist",
+      "buildResources": "installer"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "wordnet.js",
+      "index.html",
+      "style.css",
+      "icon.png",
+      "build/**/*",
+      "data/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Glyphein",
+      "artifactName": "Glyphein-Setup-${version}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "odt",
+        "name": "OpenDocument Text",
+        "description": "OpenDocument Text Document",
+        "role": "Editor"
+      }
+    ]
   }
 }
