@@ -46,8 +46,18 @@ Menu.setApplicationMenu(null);
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // A file opens as another document in the most recent window; the app on
+  // its own opens a new window.
   app.on('second-instance', (_event, argv, workingDirectory) => {
-    createWindow(odtFileIn(argv, workingDirectory));
+    const file = odtFileIn(argv, workingDirectory);
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows().at(-1);
+    if (!file || !win) {
+      createWindow(file);
+      return;
+    }
+    queueFile(win, file);
+    if (win.isMinimized()) win.restore();
+    win.focus();
   });
 }
 
@@ -58,15 +68,30 @@ function odtFileIn(argv, workingDirectory = process.cwd()) {
   return arg ? path.resolve(workingDirectory, arg) : null;
 }
 
-// The file each window was opened with, until its page asks for it.
-const startingFiles = new Map();
+// Files waiting for each window's page to open them: the one it was started
+// with, and any opened from File Explorer while it's running.
+const incomingFiles = new Map();
 
-// Resolves to { path, bytes }, or null if the window was opened without one.
-ipcMain.handle('file:starting-file', async (event) => {
-  const file = startingFiles.get(event.sender.id);
-  startingFiles.delete(event.sender.id);
-  if (!file) return null;
-  return { path: file, bytes: await fs.readFile(file) };
+function queueFile(win, file) {
+  const id = win.webContents.id;
+  incomingFiles.set(id, [...(incomingFiles.get(id) ?? []), file]);
+  // A page that has loaded collects them now; one still loading asks once ready.
+  win.webContents.send('file:incoming');
+}
+
+// Resolves to [{ path, bytes } | { path, error }], oldest first.
+ipcMain.handle('file:take-incoming', async (event) => {
+  const files = incomingFiles.get(event.sender.id) ?? [];
+  incomingFiles.delete(event.sender.id);
+  return Promise.all(
+    files.map(async (file) => {
+      try {
+        return { path: file, bytes: await fs.readFile(file) };
+      } catch (error) {
+        return { path: file, error: error.message };
+      }
+    }),
+  );
 });
 
 ipcMain.handle('wordnet:lookup', (_event, word) => wordnet.lookup(String(word)));
@@ -77,7 +102,7 @@ const ODT_FILTERS = [{ name: 'OpenDocument Text', extensions: ['odt'] }];
 
 const windowOf = (event) => BrowserWindow.fromWebContents(event.sender);
 
-// Windows whose document has unsaved changes.
+// Windows with unsaved changes in any of their documents.
 const unsaved = new WeakSet();
 
 // Resolves to { path, bytes }, or null if cancelled.
@@ -161,8 +186,9 @@ function createWindow(file = null) {
     icon: ICON,
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
-  if (file) startingFiles.set(win.webContents.id, file);
-  win.webContents.once('destroyed', () => startingFiles.delete(win.webContents.id));
+  const id = win.webContents.id;
+  if (file) incomingFiles.set(id, [file]);
+  win.webContents.once('destroyed', () => incomingFiles.delete(id));
   win.loadFile('index.html');
   // Read the dictionary index now, so the first lookup is instant.
   win.webContents.once('did-finish-load', () => setTimeout(wordnet.preload, 0));

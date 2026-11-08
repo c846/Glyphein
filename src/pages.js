@@ -80,7 +80,8 @@ function glideTo(scrollTop) {
   }
 }
 
-function stopGlide() {
+// Also used when switching documents, so a glide doesn't carry on into the next one.
+export function stopGlide() {
   cancelAnimationFrame(frame);
   frame = 0;
   target = null;

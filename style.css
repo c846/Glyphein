@@ -296,6 +296,29 @@ body {
   font-size: 10px;
 }
 
+/* The open documents: two sheets and how many are open. */
+#documents {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+}
+
+#documents svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+#documents-count {
+  min-width: 1ch;
+  font-variant-numeric: tabular-nums;
+}
+
 #toolbar button.icon svg,
 .dropdown svg {
   display: block;
@@ -971,10 +994,38 @@ body {
   color: #999;
 }
 
-/* Alignment and Lexicon items leave room for a dot beside the current one. */
+/* Alignment, Lexicon and Documents items leave room for a dot beside the current one. */
 #alignment-menu button,
-#lexicon-menu button {
+#lexicon-menu button,
+#documents-menu button {
   padding-left: 24px;
+}
+
+.dropdown hr {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid #ccc;
+}
+
+/* A document's name, cut short with "…" if it's long. */
+#documents-menu .document-name {
+  min-width: 0;
+  max-width: 280px;
+}
+
+#documents-menu .name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* After the name of a document with unsaved changes. */
+#documents-menu .unsaved {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #777;
 }
 
 .dropdown button[aria-checked='true']::before {
@@ -1060,6 +1111,23 @@ body {
   overflow: auto;
   padding: calc(var(--toolbar-bottom) + var(--page-gap)) 0 var(--page-gap);
   scrollbar-width: none;
+}
+
+/* While switching documents (src/slide.js): a still copy of the pages being
+   left, laid exactly over the desk, which slides away as the next document's
+   pages slide in. Below the floating toolbar, like the pages themselves. */
+.desk-snapshot {
+  position: fixed;
+  z-index: 4;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: calc(var(--toolbar-bottom) + var(--page-gap)) 0 var(--page-gap);
+  pointer-events: none;
+}
+
+/* The cursor is drawn apart from the pages, so it waits for them to settle. */
+body.sliding .text-caret {
+  visibility: hidden;
 }
 
 /* The text cursor, drawn by src/caret.js in place of the browser's thin one.

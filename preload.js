@@ -7,8 +7,10 @@ contextBridge.exposeInMainWorld('wordnet', {
 
 contextBridge.exposeInMainWorld('files', {
   open: () => ipcRenderer.invoke('file:open'),
-  // The file this window was opened with, as { path, bytes }, or null.
-  startingFile: () => ipcRenderer.invoke('file:starting-file'),
+  // Files waiting to be opened in this window (the one it was started with,
+  // and any opened from File Explorer since), as [{ path, bytes } | { path, error }].
+  takeIncoming: () => ipcRenderer.invoke('file:take-incoming'),
+  onIncoming: (callback) => ipcRenderer.on('file:incoming', () => callback()),
   save: (bytes, options) => ipcRenderer.invoke('file:save', bytes, options),
   confirmDiscard: (name) => ipcRenderer.invoke('file:confirm-discard', name),
   setDirty: (dirty) => ipcRenderer.send('file:set-dirty', dirty),

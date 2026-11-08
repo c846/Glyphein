@@ -13,6 +13,13 @@
         <button id="file" type="button" title="Open and save .odt files" aria-haspopup="menu" aria-expanded="false">File</button>
       </div>
       <div class="toolbar-group">
+        <!-- Lists the open documents; the number is how many. -->
+        <button id="documents" type="button" title="Open documents" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 3.5V1.5h7l2 2v7h-2M1.5 3.5h7l2 2v7h-9z" /></svg>
+          <span id="documents-count">1</span>
+        </button>
+      </div>
+      <div class="toolbar-group">
         <select id="font" title="Font"></select>
         <span class="toolbar-divider"></span>
         <input id="size" type="number" min="1" max="400" step="any" list="sizes" title="Font size" />
@@ -106,9 +113,19 @@
       <button type="button" role="menuitemcheckbox" data-action="spelling">Spellcheck</button>
     </div>
     <div id="file-menu" class="dropdown" role="menu" hidden>
+      <button type="button" role="menuitem" data-action="new">New <span class="shortcut">Ctrl+N</span></button>
       <button type="button" role="menuitem" data-action="open">Open… <span class="shortcut">Ctrl+O</span></button>
       <button type="button" role="menuitem" data-action="save">Save <span class="shortcut">Ctrl+S</span></button>
       <button type="button" role="menuitem" data-action="save-copy">Save copy… <span class="shortcut">Ctrl+Shift+S</span></button>
+      <hr />
+      <button type="button" role="menuitem" data-action="close">Close document <span class="shortcut">Ctrl+W</span></button>
+    </div>
+    <div id="documents-menu" class="dropdown" role="menu" hidden>
+      <!-- Filled in by src/files.js: one item per open document. -->
+      <div id="documents-list"></div>
+      <hr />
+      <button type="button" role="menuitem" data-action="new">New document <span class="shortcut">Ctrl+N</span></button>
+      <button type="button" role="menuitem" data-action="close">Close document <span class="shortcut">Ctrl+W</span></button>
     </div>
     <div id="bullet-menu" hidden>
       <div id="bullet-symbols"></div>

@@ -14,7 +14,7 @@ import { ThickCaret } from './caret.js';
 import { BULLET_SYMBOLS, bulletExtensions, setBulletSymbol } from './bullets.js';
 import { setupFiles } from './files.js';
 import { imageExtensions, insertImageFiles } from './images.js';
-import { closeMenusOnEscape, dropdown, openContextMenu, placeOnScreen } from './menus.js';
+import { closeContextMenu, closeMenusOnEscape, dropdown, openContextMenu, placeOnScreen } from './menus.js';
 import './pages.js'; // Ctrl+Down and Ctrl+Up flip through pages
 import { setupReference } from './reference.js';
 import { MAX_SPACE, currentSpacing, setSpacing, setTableSpacing, spacingExtension } from './spacing.js';
@@ -437,7 +437,17 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && closeMenusOnEscape()) editor.commands.focus();
 });
 
-setupFiles(editor, { defaults: { font: DEFAULT_FONT, size: DEFAULT_SIZE }, showMessage });
+setupFiles(editor, {
+  defaults: { font: DEFAULT_FONT, size: DEFAULT_SIZE },
+  showMessage,
+  // Menus pointing into the old document mustn't act on the next one.
+  // (Not closeBulletMenu, whose focus() would scroll the old document.)
+  onSwitch: () => {
+    bulletMenu.hidden = true;
+    bulletMenuPos = null;
+    closeContextMenu();
+  },
+});
 
 editor.on('transaction', syncToolbar);
 syncToolbar();
