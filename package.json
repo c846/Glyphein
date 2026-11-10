@@ -1,7 +1,7 @@
 {
   "name": "glyphein",
   "productName": "Glyphein",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A word processor.",
   "main": "main.js",
   "scripts": {
@@ -47,6 +47,7 @@
     "nspell": "^2.1.5"
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "wordnet-db": "^3.1.14"
   },
   "build": {
@@ -87,6 +88,12 @@
         "description": "OpenDocument Text Document",
         "role": "Editor"
       }
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "c846",
+      "repo": "Glyphein",
+      "releaseType": "release"
+    }
   }
 }

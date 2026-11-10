@@ -231,6 +231,15 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.setIcon(ICON);
   createWindow(odtFileIn(process.argv));
 
+  // Check GitHub Releases for a newer version. It downloads in the background
+  // and installs when the app quits. Skipped when running unpackaged (npm start).
+  if (app.isPackaged) {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('Update check failed:', err);
+    });
+  }
+
   // macOS: reopen a window when the dock icon is clicked
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
