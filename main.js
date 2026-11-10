@@ -113,7 +113,19 @@ ipcMain.handle('file:open', async (event) => {
     properties: ['openFile'],
   });
   if (canceled || !filePaths.length) return null;
-  return { path: filePaths[0], bytes: await fs.readFile(filePaths[0]) };
+  const bytes = await fs.readFile(filePaths[0]);
+  app.addRecentDocument(filePaths[0]);
+  return { path: filePaths[0], bytes };
+});
+
+// A file from the File menu's recent list. Only .odt files can be read this way.
+ipcMain.handle('file:read', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath) || path.extname(filePath).toLowerCase() !== '.odt') {
+    throw new Error('Only .odt files can be opened.');
+  }
+  const bytes = await fs.readFile(filePath);
+  app.addRecentDocument(filePath);
+  return { path: filePath, bytes };
 });
 
 // Writes to `path`, first asking where if `ask` is set or there is no path.
@@ -126,6 +138,8 @@ ipcMain.handle('file:save', async (event, bytes, { path: target, ask, title, def
     if (path.extname(target).toLowerCase() !== '.odt') target += '.odt';
   }
   await writeFileSafely(target, Buffer.from(bytes));
+  // Also listed under Glyphein in the taskbar's right-click menu.
+  app.addRecentDocument(target);
   return target;
 });
 
@@ -141,6 +155,17 @@ async function writeFileSafely(target, data) {
     throw error;
   }
 }
+
+// Opens the system's print dialog, which lists every printer (Microsoft Print
+// to PDF among them) and offers copies, page ranges and printer preferences.
+// Resolves to null once printed or cancelled, or to the reason it failed.
+ipcMain.handle('file:print', (event) => {
+  return new Promise((resolve) => {
+    event.sender.print({ silent: false, printBackground: false }, (success, failureReason) => {
+      resolve(success || failureReason === 'cancelled' ? null : failureReason || 'unknown error');
+    });
+  });
+});
 
 // Resolves to 'save', 'discard' or 'cancel'.
 ipcMain.handle('file:confirm-discard', async (event, name) => {

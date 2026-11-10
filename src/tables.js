@@ -12,12 +12,13 @@ import {
   selectedRect,
   selectionCell,
 } from '@tiptap/pm/tables';
+import { currentTextArea, pageOf, textArea } from './page.js';
 
-// Width of the text area on a page: 6.5in at 96 pixels per inch.
-const TEXT_WIDTH = 624;
+// Tables fit the width of the page's text area, which depends on the
+// document's page setup (src/page.js): 624 pixels for Letter with 1in margins.
 const MIN_ROW_HEIGHT = 20;
-// A little under the page's 9in text height, so a row always fits on one page.
-const MAX_ROW_HEIGHT = 860;
+// A little under the page's text height, so a row always fits on one page.
+const maxRowHeight = () => currentTextArea().height - 4;
 const MIN_COLUMN_WIDTH = 25;
 // The most columns that fit on the page at the minimum width.
 export const MAX_TABLE_COLS = 24;
@@ -171,13 +172,13 @@ const CellFormatting = Extension.create({
 
 /* ---------- Creating tables ---------- */
 
-function evenWidths(count) {
-  const width = Math.floor(TEXT_WIDTH / count);
-  return Array.from({ length: count }, (_, index) => (index < TEXT_WIDTH % count ? width + 1 : width));
+function evenWidths(count, textWidth) {
+  const width = Math.floor(textWidth / count);
+  return Array.from({ length: count }, (_, index) => (index < textWidth % count ? width + 1 : width));
 }
 
 export function insertTable(editor, rows, cols) {
-  const widths = evenWidths(cols);
+  const widths = evenWidths(cols, textArea(pageOf(editor.state.doc)).width);
   editor
     .chain()
     .focus()
@@ -198,7 +199,8 @@ export function insertTable(editor, rows, cols) {
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
-export function columnWidths(table, map) {
+// Each column's width. A column with none set shares out `textWidth`.
+export function columnWidths(table, map, textWidth = currentTextArea().width) {
   const widths = new Array(map.width).fill(null);
   for (const offset of new Set(map.map)) {
     const { left } = map.findCell(offset);
@@ -206,7 +208,7 @@ export function columnWidths(table, map) {
       if (width) widths[left + index] = width;
     });
   }
-  return widths.map((width) => width ?? TEXT_WIDTH / map.width);
+  return widths.map((width) => width ?? textWidth / map.width);
 }
 
 // Sets every column's width. `tableStart` is the position just inside the table.
@@ -222,10 +224,10 @@ function applyColumnWidths(tr, tableStart, widths) {
 
 // Adjusts widths so every column is at least the minimum and the table fits the
 // page. Columns below the minimum are raised, taking the space from the widest.
-function fitColumnWidths(widths) {
+function fitColumnWidths(widths, textWidth) {
   const total = sum(widths);
-  const target = Math.min(TEXT_WIDTH, Math.max(total, widths.length * MIN_COLUMN_WIDTH));
-  const scale = Math.min(1, TEXT_WIDTH / total);
+  const target = Math.min(textWidth, Math.max(total, widths.length * MIN_COLUMN_WIDTH));
+  const scale = Math.min(1, textWidth / total);
   const next = widths.map((width) => Math.max(MIN_COLUMN_WIDTH, Math.round(width * scale)));
 
   for (let excess = sum(next) - target; excess > 0; excess--) {
@@ -398,12 +400,14 @@ const TableFit = Extension.create({
           if (!transactions.some((transaction) => transaction.docChanged)) return null;
 
           const { tr } = state;
+          // The document's own page, which may just have changed.
+          const textWidth = textArea(pageOf(state.doc)).width;
           state.doc.forEach((node, pos) => {
             if (node.type.name !== 'table') return;
 
             const map = TableMap.get(node);
-            const widths = columnWidths(node, map);
-            const fitted = fitColumnWidths(widths);
+            const widths = columnWidths(node, map, textWidth);
+            const fitted = fitColumnWidths(widths, textWidth);
             const allSet = map.map.every((offset) => node.nodeAt(offset).attrs.colwidth);
             const alreadyFits = widths.every((width, index) => width === fitted[index]);
             if (!allSet || !alreadyFits) applyColumnWidths(tr, pos + 1, fitted);
@@ -551,7 +555,7 @@ function startRowDrag(view, row, startEvent) {
   const onMove = (event) => {
     moved = true;
     const wanted = startHeight + event.clientY - startEvent.clientY;
-    const height = Math.min(MAX_ROW_HEIGHT, Math.max(MIN_ROW_HEIGHT, wanted));
+    const height = Math.min(maxRowHeight(), Math.max(MIN_ROW_HEIGHT, wanted));
     view.dispatch(view.state.tr.setMeta(rowResizeKey, { pos, height }));
   };
 

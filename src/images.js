@@ -1,16 +1,19 @@
 import { Extension, ResizableNodeView } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { currentTextArea } from './page.js';
 
-// The page's text area at 96 pixels per inch: 6.5in wide, and a little under
-// 9in tall so an image always fits on one page.
-const MAX_WIDTH = 624;
-const MAX_HEIGHT = 860;
 const MIN_SIZE = 16;
 
+// The largest an image can be: the page's text area (src/page.js), and a
+// little under its height so an image always fits on one page. `area` is a
+// text area in pixels; by default, that of the document being edited.
+const maxSize = (area = currentTextArea()) => ({ width: area.width, height: area.height - 4 });
+
 // Scales width x height down, keeping its shape, until it fits the page.
-export function fitToPage(width, height) {
-  const scale = Math.min(1, MAX_WIDTH / width, MAX_HEIGHT / height);
+export function fitToPage(width, height, area) {
+  const max = maxSize(area);
+  const scale = Math.min(1, max.width / width, max.height / height);
   return { width: Math.round(width * scale), height: Math.round(height * scale) };
 }
 
@@ -58,7 +61,15 @@ const ResizableImage = Image.extend({
         options: {
           directions: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
           min: { width: MIN_SIZE, height: MIN_SIZE },
-          max: { width: MAX_WIDTH, height: MAX_HEIGHT },
+          // Read as a corner is dragged, so it follows the current page.
+          max: {
+            get width() {
+              return maxSize().width;
+            },
+            get height() {
+              return maxSize().height;
+            },
+          },
           preserveAspectRatio: true,
         },
       });

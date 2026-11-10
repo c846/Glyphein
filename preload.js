@@ -7,11 +7,15 @@ contextBridge.exposeInMainWorld('wordnet', {
 
 contextBridge.exposeInMainWorld('files', {
   open: () => ipcRenderer.invoke('file:open'),
+  // A file from the recent list, as { path, bytes }. Rejects if it can't be read.
+  read: (path) => ipcRenderer.invoke('file:read', path),
   // Files waiting to be opened in this window (the one it was started with,
   // and any opened from File Explorer since), as [{ path, bytes } | { path, error }].
   takeIncoming: () => ipcRenderer.invoke('file:take-incoming'),
   onIncoming: (callback) => ipcRenderer.on('file:incoming', () => callback()),
   save: (bytes, options) => ipcRenderer.invoke('file:save', bytes, options),
+  // Resolves to null once printed or cancelled, or to the reason printing failed.
+  print: () => ipcRenderer.invoke('file:print'),
   confirmDiscard: (name) => ipcRenderer.invoke('file:confirm-discard', name),
   setDirty: (dirty) => ipcRenderer.send('file:set-dirty', dirty),
   onCloseRequested: (callback) => ipcRenderer.on('app:close-requested', () => callback()),

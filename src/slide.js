@@ -1,3 +1,5 @@
+import { PAGE_VARIABLES } from './page.js';
+
 // The slide between documents. The pages being left are copied into a
 // still picture over the desk; the next document is swapped into the real
 // editor; then the two slide across together, like turning a carousel. The
@@ -38,6 +40,9 @@ function snapshotOfDesk() {
     width: `${rect.width}px`,
     height: `${rect.height}px`,
   });
+  // The next document may have another page size: the copy keeps this one's.
+  const root = getComputedStyle(document.documentElement);
+  for (const name of PAGE_VARIABLES) snapshot.style.setProperty(name, root.getPropertyValue(name));
   const copy = page.cloneNode(true);
   copy.removeAttribute('id');
   for (const editable of copy.querySelectorAll('[contenteditable]')) editable.removeAttribute('contenteditable');

@@ -10,13 +10,19 @@
     <div id="toolbar">
       <!-- Each group sits on one shared light-gray background. -->
       <div class="toolbar-group">
-        <button id="file" type="button" title="Open and save .odt files" aria-haspopup="menu" aria-expanded="false">File</button>
+        <button id="file" type="button" title="Open, save and print documents" aria-haspopup="menu" aria-expanded="false">File</button>
       </div>
       <div class="toolbar-group">
         <!-- Lists the open documents; the number is how many. -->
         <button id="documents" type="button" title="Open documents" aria-haspopup="menu" aria-expanded="false">
           <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 3.5V1.5h7l2 2v7h-2M1.5 3.5h7l2 2v7h-9z" /></svg>
           <span id="documents-count">1</span>
+        </button>
+      </div>
+      <div class="toolbar-group">
+        <!-- The preset at the cursor: Standard, Title or a heading. -->
+        <button id="preset" type="button" title="Presets (right-click one in the menu to change it)" aria-haspopup="menu" aria-expanded="false">
+          <span id="preset-label">Standard</span>
         </button>
       </div>
       <div class="toolbar-group">
@@ -118,7 +124,34 @@
       <button type="button" role="menuitem" data-action="save">Save <span class="shortcut">Ctrl+S</span></button>
       <button type="button" role="menuitem" data-action="save-copy">Save copy… <span class="shortcut">Ctrl+Shift+S</span></button>
       <hr />
+      <button type="button" role="menuitem" data-action="page-setup">Page setup…</button>
+      <button type="button" role="menuitem" data-action="print">Print… <span class="shortcut">Ctrl+P</span></button>
+      <hr />
       <button type="button" role="menuitem" data-action="close">Close document <span class="shortcut">Ctrl+W</span></button>
+      <div id="recent-section" hidden>
+        <hr />
+        <div class="menu-label">Recent</div>
+        <!-- Filled in by src/files.js: the files most recently opened or saved. -->
+        <div id="recent-list"></div>
+        <button type="button" role="menuitem" data-action="clear-recent" class="quiet">Clear recent list</button>
+      </div>
+    </div>
+    <div id="preset-menu" class="dropdown" role="menu" hidden>
+      <!-- Filled in by src/presets.js: each preset, shown in its own font. -->
+      <div id="preset-list"></div>
+      <hr />
+      <div class="menu-label">Right-click a preset to change it</div>
+    </div>
+    <div id="find-bar" role="search" hidden>
+      <input id="find-input" type="search" placeholder="Find in document" aria-label="Find in document" spellcheck="false" />
+      <span id="find-count" aria-live="polite"></span>
+      <button id="find-previous" type="button" title="Previous match (Shift+Enter)" aria-label="Previous match">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5 6 4l3.5 3.5" /></svg>
+      </button>
+      <button id="find-next" type="button" title="Next match (Enter)" aria-label="Next match">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
+      </button>
+      <button id="find-close" type="button" title="Close (Escape)" aria-label="Close">✕</button>
     </div>
     <div id="documents-menu" class="dropdown" role="menu" hidden>
       <!-- Filled in by src/files.js: one item per open document. -->
@@ -174,6 +207,70 @@
           <label class="field"><span>Rows</span><input id="dimension-rows" type="number" min="1" step="1" required /><span class="unit"></span></label>
           <label class="field"><span>Columns</span><input id="dimension-cols" type="number" min="1" step="1" required /><span class="unit"></span></label>
         </section>
+        <div class="dialog-buttons">
+          <button value="ok" class="primary">OK</button>
+          <button value="cancel" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="preset-dialog" class="dialog">
+      <form method="dialog">
+        <h2 id="preset-dialog-title" class="dialog-title"></h2>
+        <section class="dialog-section">
+          <label class="field"><span>Font</span><select id="preset-font"></select><span class="unit"></span></label>
+          <label class="field"><span>Size</span><input id="preset-size" type="number" step="any" required /><span class="unit">pt</span></label>
+          <div class="field">
+            <span>Style</span>
+            <div class="style-toggles">
+              <button id="preset-bold" type="button" title="Bold" aria-pressed="false"><b>B</b></button>
+              <button id="preset-italic" type="button" title="Italic" aria-pressed="false"><i>I</i></button>
+              <button id="preset-underline" type="button" title="Underline" aria-pressed="false"><u>U</u></button>
+            </div>
+            <span class="unit"></span>
+          </div>
+        </section>
+        <p id="preset-preview"></p>
+        <div class="dialog-buttons">
+          <button id="preset-reset" type="button" title="Go back to this preset's original settings">Restore default</button>
+          <button value="ok" class="primary">OK</button>
+          <button value="cancel" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <!-- File > Page setup: this document's paper and margins, in inches. -->
+    <dialog id="page-dialog" class="dialog">
+      <form method="dialog">
+        <h2 class="dialog-title">Page setup</h2>
+        <div class="page-setup">
+          <div>
+            <section class="dialog-section">
+              <h3>Paper</h3>
+              <label class="field"><span>Size</span><select id="page-paper"></select><span class="unit"></span></label>
+              <label class="field"><span>Width</span><input id="page-width" type="number" step="any" required /><span class="unit">in</span></label>
+              <label class="field"><span>Height</span><input id="page-height" type="number" step="any" required /><span class="unit">in</span></label>
+              <div class="field">
+                <span>Orientation</span>
+                <div class="style-toggles orientation">
+                  <button id="page-portrait" type="button" aria-pressed="true">Portrait</button>
+                  <button id="page-landscape" type="button" aria-pressed="false">Landscape</button>
+                </div>
+                <span class="unit"></span>
+              </div>
+            </section>
+            <section class="dialog-section">
+              <h3>Margins</h3>
+              <label class="field"><span>Top</span><input id="page-top" type="number" step="any" required /><span class="unit">in</span></label>
+              <label class="field"><span>Bottom</span><input id="page-bottom" type="number" step="any" required /><span class="unit">in</span></label>
+              <label class="field"><span>Left</span><input id="page-left" type="number" step="any" required /><span class="unit">in</span></label>
+              <label class="field"><span>Right</span><input id="page-right" type="number" step="any" required /><span class="unit">in</span></label>
+            </section>
+          </div>
+          <!-- The page in proportion, with its text area shaded. -->
+          <div id="page-preview" aria-hidden="true">
+            <div id="page-preview-sheet"><div id="page-preview-text"></div></div>
+          </div>
+        </div>
+        <p id="page-problem" role="alert"></p>
         <div class="dialog-buttons">
           <button value="ok" class="primary">OK</button>
           <button value="cancel" formnovalidate>Cancel</button>

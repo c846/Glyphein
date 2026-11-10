@@ -6,6 +6,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { TableMap } from '@tiptap/pm/tables';
 import { fitToPage, naturalSize } from './images.js';
+import { DEFAULT_PAGE, MAX_PAPER, MIN_PAPER, MIN_TEXT, pageOf, pageProblem, textArea } from './page.js';
 import { MAX_SPACE } from './spacing.js';
 import { columnWidths } from './tables.js';
 
@@ -75,14 +76,42 @@ const escapeXml = (text) =>
 
 /* ======================= Saving ======================= */
 
+// Each preset's named style in the file: Word and LibreOffice know these
+// names, and treat the headings as headings (in outlines and contents).
+const PRESET_STYLES = {
+  title: { name: 'Title', display: 'Title' },
+  h1: { name: 'Heading_20_1', display: 'Heading 1', level: 1 },
+  h2: { name: 'Heading_20_2', display: 'Heading 2', level: 2 },
+  h3: { name: 'Heading_20_3', display: 'Heading 3', level: 3 },
+  h4: { name: 'Heading_20_4', display: 'Heading 4', level: 4 },
+  h5: { name: 'Heading_20_5', display: 'Heading 5', level: 5 },
+  h6: { name: 'Heading_20_6', display: 'Heading 6', level: 6 },
+};
+
+// A preset's settings as ODF text properties.
+function presetTextProperties({ font, size, bold, italic, underline }) {
+  const weight = bold ? 'bold' : 'normal';
+  const style = italic ? 'italic' : 'normal';
+  const underlined = underline ? ' style:text-underline-width="auto" style:text-underline-color="font-color"' : '';
+  return (
+    `<style:text-properties style:font-name="${escapeXml(font)}" fo:font-size="${size}pt" ` +
+    `style:font-size-asian="${size}pt" style:font-size-complex="${size}pt" ` +
+    `fo:font-weight="${weight}" style:font-weight-asian="${weight}" style:font-weight-complex="${weight}" ` +
+    `fo:font-style="${style}" style:font-style-asian="${style}" style:font-style-complex="${style}" ` +
+    `style:text-underline-style="${underline ? 'solid' : 'none'}"${underlined}/>`
+  );
+}
+
 class OdtWriter {
-  constructor(defaults, imageSizes) {
-    this.defaults = defaults;
+  constructor(presets, page, imageSizes) {
+    this.presets = presets;
+    this.page = page;
+    this.textWidth = textArea(page).width;
     this.imageSizes = imageSizes;
     this.styles = new Map(); // key -> name
     this.styleXml = [];
     this.counters = {};
-    this.fonts = new Set([defaults.font]);
+    this.fonts = new Set(Object.values(presets).map((preset) => preset.font));
     this.pictures = new Map(); // src -> path in the zip
     this.files = {};
     this.manifest = [];
@@ -185,16 +214,20 @@ class OdtWriter {
   }
 
   paragraph(node) {
-    const { textAlign, lineSpacing, spaceBefore, spaceAfter } = node.attrs;
+    const { textAlign, lineSpacing, spaceBefore, spaceAfter, preset } = node.attrs;
+    const named = PRESET_STYLES[preset];
+    const parent = named?.name ?? 'Standard';
     const props = [];
     if (textAlign && textAlign !== 'left') props.push(`fo:text-align="${textAlign}"`);
     // ODF's 100% is the font's own single spacing, the app's "Single".
     if (lineSpacing != null && lineSpacing !== 1) props.push(`fo:line-height="${round(lineSpacing * 100)}%"`);
     if (spaceBefore) props.push(`fo:margin-top="${round(spaceBefore)}pt"`);
     if (spaceAfter) props.push(`fo:margin-bottom="${round(spaceAfter)}pt"`);
-    const style = props.length
-      ? this.style('P', 'paragraph', `<style:paragraph-properties ${props.join(' ')}/>`, 'Standard')
-      : 'Standard';
+    const style = props.length ? this.style('P', 'paragraph', `<style:paragraph-properties ${props.join(' ')}/>`, parent) : parent;
+    // Headings are text:h, with their level, so other programs see them as headings.
+    if (named?.level) {
+      return `<text:h text:style-name="${style}" text:outline-level="${named.level}">${this.inlines(node)}</text:h>`;
+    }
     return `<text:p text:style-name="${style}">${this.inlines(node)}</text:p>`;
   }
 
@@ -315,7 +348,7 @@ class OdtWriter {
 
   table(node) {
     const map = TableMap.get(node);
-    const widths = columnWidths(node, map).map((width) => Math.round(width));
+    const widths = columnWidths(node, map, this.textWidth).map((width) => Math.round(width));
     const name = `Table${++this.tableCount}`;
 
     const tableProps = [`style:width="${inches(widths.reduce((a, b) => a + b, 0))}"`, 'table:align="left"'];
@@ -377,7 +410,6 @@ class OdtWriter {
 
   write(doc) {
     const body = this.blocks(doc);
-    const { font, size } = this.defaults;
     const xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
 
     const content =
@@ -385,20 +417,34 @@ class OdtWriter {
       `<office:automatic-styles>${this.styleXml.join('')}</office:automatic-styles>` +
       `<office:body><office:text>${body}</office:text></office:body></office:document-content>`;
 
-    // The app's page: US Letter with 1in margins, Times New Roman 12pt.
+    // The app's page, US Letter with 1in margins; its text, the Standard
+    // preset, with tab stops every half inch; and the other presets.
+    const presetStyles = Object.entries(PRESET_STYLES)
+      .map(
+        ([preset, { name, display, level }]) =>
+          `<style:style style:name="${name}" style:display-name="${display}" style:family="paragraph" ` +
+          `style:parent-style-name="Standard" style:next-style-name="Standard" style:class="${level ? 'text' : 'chapter'}"` +
+          `${level ? ` style:default-outline-level="${level}"` : ''}>${presetTextProperties(this.presets[preset])}</style:style>`,
+      )
+      .join('');
+    // The document's page setup (src/page.js), in inches.
+    const page = this.page;
+    const length = (inchesValue) => `${round(inchesValue)}in`;
     const styles =
       `${xml}<office:document-styles ${XMLNS} office:version="1.3">${this.fontFaces()}` +
       '<office:styles>' +
       '<style:default-style style:family="paragraph">' +
-      '<style:paragraph-properties fo:line-height="100%" fo:margin-top="0pt" fo:margin-bottom="0pt"/>' +
-      `<style:text-properties style:font-name="${escapeXml(font)}" fo:font-size="${size}pt" ` +
-      `style:font-size-asian="${size}pt" style:font-size-complex="${size}pt"/>` +
+      '<style:paragraph-properties fo:line-height="100%" fo:margin-top="0pt" fo:margin-bottom="0pt" style:tab-stop-distance="0.5in"/>' +
+      presetTextProperties(this.presets.standard) +
       '</style:default-style>' +
       '<style:style style:name="Standard" style:family="paragraph" style:class="text"/>' +
+      presetStyles +
       '</office:styles>' +
       '<office:automatic-styles><style:page-layout style:name="pm1">' +
-      '<style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" style:print-orientation="portrait" ' +
-      'fo:margin-top="1in" fo:margin-bottom="1in" fo:margin-left="1in" fo:margin-right="1in"/>' +
+      `<style:page-layout-properties fo:page-width="${length(page.width)}" fo:page-height="${length(page.height)}" ` +
+      `style:print-orientation="${page.width > page.height ? 'landscape' : 'portrait'}" ` +
+      `fo:margin-top="${length(page.top)}" fo:margin-bottom="${length(page.bottom)}" ` +
+      `fo:margin-left="${length(page.left)}" fo:margin-right="${length(page.right)}"/>` +
       '</style:page-layout></office:automatic-styles>' +
       '<office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1"/></office:master-styles>' +
       '</office:document-styles>';
@@ -439,9 +485,10 @@ class OdtWriter {
   }
 }
 
-// `defaults` is { font, size }: the app's default font family and size in points.
-// Resolves to the file's bytes.
-export async function documentToOdt(doc, defaults) {
+// `presets` is the app's presets (src/presets.js): the document's default
+// text (Standard), and the title and headings. Resolves to the file's bytes.
+export async function documentToOdt(doc, presets) {
+  const page = pageOf(doc);
   // Images are normally stored with their size, but measure any that aren't.
   const imageSizes = new Map();
   const unsized = [];
@@ -451,12 +498,12 @@ export async function documentToOdt(doc, defaults) {
   for (const src of new Set(unsized)) {
     try {
       const size = await naturalSize(src);
-      imageSizes.set(src, fitToPage(size.width, size.height));
+      imageSizes.set(src, fitToPage(size.width, size.height, textArea(page)));
     } catch {
       // Left at the fallback size.
     }
   }
-  return new OdtWriter(defaults, imageSizes).write(doc);
+  return new OdtWriter(presets, page, imageSizes).write(doc);
 }
 
 /* ======================= Opening ======================= */
@@ -565,25 +612,45 @@ class StyleSheet {
   }
 }
 
+// The preset a paragraph style stands for: its own name or display name, or
+// an ancestor's, such as "Heading 1" or "Title". Null if none.
+function presetOfStyles(chain) {
+  for (const style of [...chain].reverse()) {
+    for (const name of [attr(style, 'style:name'), attr(style, 'style:display-name')]) {
+      const plain = name?.replace(/_20_/g, ' ').trim().toLowerCase() ?? '';
+      if (plain === 'title') return 'title';
+      const heading = /^heading ?([1-6])$/.exec(plain);
+      if (heading) return `h${heading[1]}`;
+    }
+  }
+  return null;
+}
+
 class OdtReader {
-  constructor(files, sheet, defaults) {
+  constructor(files, sheet, presets, page) {
     this.files = files;
     this.sheet = sheet;
-    this.defaults = defaults;
+    this.presets = presets;
+    // The page's text area, which pictures and tables are fitted to.
+    this.area = textArea(page);
+    // The preset of the paragraph being read: its text is drawn in that
+    // unless it says otherwise.
+    this.base = presets.standard;
     this.unsizedImages = [];
   }
 
   marks(format) {
     const marks = [];
-    if (format.bold) marks.push({ type: 'bold' });
-    if (format.italic) marks.push({ type: 'italic' });
-    if (format.underline) marks.push({ type: 'underline' });
-    // Only what differs from the app's defaults is stored on the text.
+    const base = this.base;
+    if (format.bold && !base.bold) marks.push({ type: 'bold' });
+    if (format.italic && !base.italic) marks.push({ type: 'italic' });
+    if (format.underline && !base.underline) marks.push({ type: 'underline' });
+    // Only what differs from the paragraph's preset is stored on the text.
     const attrs = {};
-    if (format.font && format.font.toLowerCase() !== this.defaults.font.toLowerCase()) {
+    if (format.font && format.font.toLowerCase() !== base.font.toLowerCase()) {
       attrs.fontFamily = `"${format.font}"`;
     }
-    if (format.size && Math.abs(format.size - this.defaults.size) > 0.01) {
+    if (format.size && Math.abs(format.size - base.size) > 0.01) {
       attrs.fontSize = `${Math.min(400, Math.max(1, +format.size.toFixed(2)))}pt`;
     }
     if (Object.keys(attrs).length) marks.push({ type: 'textStyle', attrs });
@@ -650,10 +717,22 @@ class OdtReader {
       if (pt > 0) attrs[name] = Math.min(MAX_SPACE, round(pt));
     }
 
+    // A heading or the title, by its style, or any other text:h by its level.
+    let preset = presetOfStyles(this.sheet.chain('paragraph', styleName));
+    if (!preset && qname(element) === 'text:h') {
+      const level = Math.min(6, Math.max(1, parseInt(attr(element, 'text:outline-level'), 10) || 1));
+      preset = `h${level}`;
+    }
+    if (preset) attrs.preset = preset;
+
     const format = this.sheet.textFormat('paragraph', styleName, PLAIN);
     const runs = [];
     const after = [];
+    // Put back afterwards: a text box inside holds paragraphs of its own.
+    const outerBase = this.base;
+    this.base = this.presets[preset ?? 'standard'];
     this.inlines(element, format, runs, after, { space: true });
+    this.base = outerBase;
 
     const lines = [[]];
     for (const run of runs) {
@@ -743,7 +822,7 @@ class OdtReader {
       const attrs = { src, alt: title?.textContent || null };
       const width = toPixels(attr(frame, 'svg:width'));
       const height = toPixels(attr(frame, 'svg:height'));
-      if (width > 0 && height > 0) Object.assign(attrs, fitToPage(width, height));
+      if (width > 0 && height > 0) Object.assign(attrs, fitToPage(width, height, this.area));
       else this.unsizedImages.push(attrs);
       runs.push({ image: attrs });
       return;
@@ -839,7 +918,7 @@ class OdtReader {
       widths = columns.map((column) => Math.round(column.width));
     } else if (columns.length && columns.every((column) => column.relative > 0)) {
       // Shares of the table's width.
-      const total = toPixels(tableProps['style:width']) || 624;
+      const total = toPixels(tableProps['style:width']) || this.area.width;
       const sum = columns.reduce((a, column) => a + column.relative, 0);
       widths = columns.map((column) => Math.round((column.relative / sum) * total));
     }
@@ -886,7 +965,7 @@ class OdtReader {
     for (const attrs of this.unsizedImages) {
       try {
         const size = await naturalSize(attrs.src);
-        Object.assign(attrs, fitToPage(size.width, size.height));
+        Object.assign(attrs, fitToPage(size.width, size.height, this.area));
       } catch {
         // Shown at its own size.
       }
@@ -894,9 +973,43 @@ class OdtReader {
   }
 }
 
-// Reads an .odt file's bytes. `defaults` is as for documentToOdt. Resolves to
+// The page size and margins of a file's first page style, in inches, or the
+// default (US Letter, 1in margins) if it has none or they can't be used.
+function readPage(styles) {
+  if (!styles) return DEFAULT_PAGE;
+  const master = styles.getElementsByTagNameNS(NS.style, 'master-page')[0];
+  const layoutName = master && attr(master, 'style:page-layout-name');
+  const layout = [...styles.getElementsByTagNameNS(NS.style, 'page-layout')].find(
+    (element) => attr(element, 'style:name') === layoutName,
+  );
+  if (!layout) return DEFAULT_PAGE;
+  const props = propertiesOf(layout, 'page-layout-properties');
+  const inchesOf = (name, fallback) => {
+    const pt = toPoints(props[name]);
+    return pt == null ? fallback : round(pt / 72);
+  };
+  const page = {
+    width: inchesOf('fo:page-width', DEFAULT_PAGE.width),
+    height: inchesOf('fo:page-height', DEFAULT_PAGE.height),
+    top: inchesOf('fo:margin-top', DEFAULT_PAGE.top),
+    bottom: inchesOf('fo:margin-bottom', DEFAULT_PAGE.bottom),
+    left: inchesOf('fo:margin-left', DEFAULT_PAGE.left),
+    right: inchesOf('fo:margin-right', DEFAULT_PAGE.right),
+  };
+  if (!pageProblem(page)) return page;
+  // Paper out of range, or margins too big for it: keep the paper (within
+  // range), with margins of up to 1in that leave room for the text.
+  const clamp = (value) => Math.min(MAX_PAPER, Math.max(MIN_PAPER, value));
+  const width = clamp(page.width);
+  const height = clamp(page.height);
+  const side = Math.max(0, Math.min(1, round((width - MIN_TEXT) / 2 - 0.01)));
+  const end = Math.max(0, Math.min(1, round((height - MIN_TEXT) / 2 - 0.01)));
+  return { width, height, top: end, bottom: end, left: side, right: side };
+}
+
+// Reads an .odt file's bytes. `presets` is as for documentToOdt. Resolves to
 // the document as ProseMirror JSON; throws an Error with a message for the user.
-export async function odtToDocument(bytes, defaults) {
+export async function odtToDocument(bytes, presets) {
   let files;
   try {
     files = unzipSync(bytes);
@@ -921,8 +1034,16 @@ export async function odtToDocument(bytes, defaults) {
   const body = content.getElementsByTagNameNS(NS.office, 'text')[0];
   if (!body) throw new Error('It is not a text document. Only OpenDocument Text (.odt) files can be opened.');
 
-  const reader = new OdtReader(files, new StyleSheet([parse('styles.xml'), content]), defaults);
+  const styles = parse('styles.xml');
+  const page = readPage(styles);
+  const reader = new OdtReader(files, new StyleSheet([styles, content]), presets, page);
   const blocks = reader.blocks(body);
   await reader.sizeImages();
-  return { type: 'doc', content: blocks.length ? blocks : [EMPTY_PARAGRAPH] };
+  // Letter with 1in margins is every document's page unless it says otherwise.
+  const isDefault = Object.keys(DEFAULT_PAGE).every((key) => Math.abs(page[key] - DEFAULT_PAGE[key]) < 0.005);
+  return {
+    type: 'doc',
+    ...(isDefault ? {} : { attrs: { page } }),
+    content: blocks.length ? blocks : [EMPTY_PARAGRAPH],
+  };
 }

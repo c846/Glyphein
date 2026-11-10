@@ -1,8 +1,12 @@
 :root {
-  /* US Letter with 1in margins */
+  /* The page: US Letter with 1in margins, until src/page.js sets the
+     document's own page setup. */
   --page-width: 8.5in;
   --page-height: 11in;
-  --margin: 1in;
+  --margin-top: 1in;
+  --margin-bottom: 1in;
+  --margin-left: 1in;
+  --margin-right: 1in;
   --page-gap: 24px;
   --desk-color: #e5e5e5;
   /* Where the floating toolbar ends: its 8px inset plus its 38px height. The
@@ -134,23 +138,23 @@ body {
 
 /* The font and language lists are stylable dropdowns (Chromium's base-select), so they can
    match the app's other menus and highlight in gray instead of system blue. */
-:is(#font, #language, #line-spacing),
-:is(#font, #language, #line-spacing)::picker(select) {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper),
+:is(#font, #language, #line-spacing, #preset-font, #page-paper)::picker(select) {
   appearance: base-select;
 }
 
-:is(#font, #language, #line-spacing) {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) {
   display: inline-flex;
   align-items: center;
   padding: 0 8px;
 }
 
 /* No arrow: each box opens its list when clicked. */
-:is(#font, #language, #line-spacing)::picker-icon {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper)::picker-icon {
   display: none;
 }
 
-:is(#font, #language, #line-spacing)::picker(select) {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper)::picker(select) {
   max-height: 60vh;
   /* The gap from its box, as for the toolbar menus (DROPDOWN_GAP in src/menus.js). */
   margin: 4px 0;
@@ -165,7 +169,7 @@ body {
 /* The lists extend downward from their box as they open, and fold back up as
    they close, like the toolbar menus. The clip reaches past the edges so the
    shadow shows once open. */
-:is(#font, #language, #line-spacing)::picker(select) {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper)::picker(select) {
   clip-path: inset(0 0 100% 0);
   opacity: 0;
   transition:
@@ -175,7 +179,7 @@ body {
     overlay var(--close) allow-discrete;
 }
 
-:is(#font, #language, #line-spacing):open::picker(select) {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper):open::picker(select) {
   clip-path: inset(-16px);
   opacity: 1;
   transition:
@@ -186,30 +190,30 @@ body {
 }
 
 @starting-style {
-  :is(#font, #language, #line-spacing):open::picker(select) {
+  :is(#font, #language, #line-spacing, #preset-font, #page-paper):open::picker(select) {
     clip-path: inset(0 0 100% 0);
     opacity: 0;
   }
 }
 
-:is(#font, #language, #line-spacing) option {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option {
   padding: 4px 12px 4px 8px;
   background: transparent;
   outline: none;
 }
 
-:is(#font, #language, #line-spacing) option:hover,
-:is(#font, #language, #line-spacing) option:focus-visible {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:hover,
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:focus-visible {
   background: var(--hover);
 }
 
-:is(#font, #language, #line-spacing) option:checked {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:checked {
   background: var(--selected);
 }
 
 /* A blue dot for the current font, as in the other menus. Chromium hides it
    on the other options. */
-:is(#font, #language, #line-spacing) option::checkmark {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option::checkmark {
   content: '';
   width: 6px;
   height: 6px;
@@ -219,12 +223,12 @@ body {
   animation: dot-pop 260ms var(--ease-out) 60ms both;
 }
 
-:is(#font, #language, #line-spacing) option:checked:hover,
-:is(#font, #language, #line-spacing) option:checked:focus-visible {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:checked:hover,
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:checked:focus-visible {
   background: var(--selected-hover);
 }
 
-:is(#font, #language, #line-spacing) option:active {
+:is(#font, #language, #line-spacing, #preset-font, #page-paper) option:active {
   background: var(--selected-hover);
 }
 
@@ -330,6 +334,25 @@ body {
 
 #toolbar button:disabled {
   color: #999;
+}
+
+/* Bold, italic or underline that the paragraph's preset already sets, so it
+   can't be changed here: greyed out, with a line through it. */
+#toolbar button.locked {
+  position: relative;
+}
+
+#toolbar button.locked::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 1.5px;
+  margin: -0.75px 0 0 -9px;
+  background: #999;
+  border-radius: 1px;
+  transform: rotate(45deg); /* Against the slant of the italic I. */
 }
 
 /* ---------- Dialogs: spacing, table size, messages ---------- */
@@ -997,7 +1020,8 @@ body {
 /* Alignment, Lexicon and Documents items leave room for a dot beside the current one. */
 #alignment-menu button,
 #lexicon-menu button,
-#documents-menu button {
+#documents-menu button,
+#preset-menu button {
   padding-left: 24px;
 }
 
@@ -1064,7 +1088,8 @@ body {
   font-weight: bold;
 }
 
-#context-menu .menu-label {
+#context-menu .menu-label,
+.dropdown .menu-label {
   padding: 4px 12px;
   color: #555;
 }
@@ -1171,12 +1196,12 @@ body.sliding .text-caret {
   box-sizing: border-box;
   width: var(--page-width);
   margin: 0 auto;
-  padding: var(--margin);
+  padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
 
   column-count: 1;
-  column-height: calc(var(--page-height) - 2 * var(--margin));
+  column-height: calc(var(--page-height) - var(--margin-top) - var(--margin-bottom));
   column-wrap: wrap;
-  row-gap: calc(2 * var(--margin) + var(--page-gap));
+  row-gap: calc(var(--margin-bottom) + var(--page-gap) + var(--margin-top));
 
   /* Draws the sheets: one page of white, then one gap of desk, repeating. */
   background: repeating-linear-gradient(
@@ -1187,9 +1212,12 @@ body.sliding .text-caret {
     var(--desk-color) calc(var(--page-height) + var(--page-gap))
   );
 
-  /* Keep in sync with DEFAULT_FONT and DEFAULT_SIZE in src/renderer.js. */
+  /* The Standard preset, until src/presets.js puts in the one chosen. */
   font-family: 'Times New Roman';
   font-size: 12pt;
+  /* Tab reaches the next half-inch stop, as in Word. Keep in sync with the
+     tab-stop-distance saved by src/odt.js. */
+  tab-size: 0.5in;
   /* "Single" line spacing. Keep in sync with SINGLE_LINE in src/spacing.js. */
   line-height: 1.15;
   overflow-wrap: break-word;
@@ -1281,6 +1309,7 @@ body.bullet-hover .ProseMirror {
   box-sizing: border-box;
   background: white;
   border: 1px solid black;
+  border-radius: 3px;
 }
 
 .ProseMirror-selectednode [data-resize-handle],
@@ -1342,4 +1371,354 @@ body.col-resize .ProseMirror {
 
 body.row-resize .ProseMirror {
   cursor: row-resize;
+}
+
+/* ---------- Presets: the toolbar button, its menu, and the dialog ---------- */
+
+/* A steady width, so the toolbar doesn't shift as the cursor moves between
+   a heading and ordinary text. */
+#preset {
+  display: flex;
+  align-items: center;
+  width: 104px;
+  padding: 0 8px;
+}
+
+/* Each preset is shown in its own font and style. */
+#preset-menu {
+  min-width: 300px;
+}
+
+#preset-menu .preset-sample {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#preset-menu .shortcut {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#preset-menu .menu-label {
+  font-size: 12px;
+}
+
+/* The preset's font list is wider than the dialog's other boxes. */
+#preset-dialog .field {
+  grid-template-columns: 1fr 200px 16px;
+}
+
+.style-toggles {
+  display: flex;
+  gap: 4px;
+}
+
+.style-toggles button {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  background: var(--group);
+  color: black;
+  border: none;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+}
+
+.style-toggles button:hover {
+  background: var(--group-hover);
+}
+
+.style-toggles button[aria-pressed='true'] {
+  background: var(--group-selected);
+}
+
+.style-toggles button[aria-pressed='true']:hover,
+.style-toggles button:active {
+  background: var(--group-selected-hover);
+}
+
+.style-toggles button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* How the preset will look. */
+#preset-preview {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  background: #f6f6f6;
+  border-radius: var(--radius);
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Pushed to the left, apart from OK and Cancel. */
+#preset-reset {
+  margin-right: auto;
+}
+
+/* Nothing to restore: the preset is as it came. */
+.dialog-buttons button:disabled {
+  background: var(--group);
+  color: #999;
+}
+
+/* ---------- Page setup (File > Page setup) ---------- */
+
+/* The fields, with a picture of the page beside them. */
+#page-dialog {
+  max-width: 560px;
+}
+
+#page-dialog .field {
+  grid-template-columns: 84px 180px 16px;
+}
+
+.page-setup {
+  display: flex;
+  gap: 20px;
+}
+
+.style-toggles.orientation button {
+  width: auto;
+  flex: 1;
+  padding: 0 8px;
+}
+
+/* Room for the largest sheet the preview draws (150 by 190 pixels). */
+#page-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 170px;
+  min-height: 210px;
+  align-self: center;
+  background: var(--desk-color);
+  border-radius: var(--radius);
+}
+
+#page-preview-sheet {
+  position: relative;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition:
+    width var(--open) var(--ease-out),
+    height var(--open) var(--ease-out);
+}
+
+/* The text area: faint lines, like text. */
+#page-preview-text {
+  position: absolute;
+  background: repeating-linear-gradient(to bottom, #c8c8c8 0 2px, transparent 2px 6px);
+  transition:
+    top var(--open) var(--ease-out),
+    bottom var(--open) var(--ease-out),
+    left var(--open) var(--ease-out),
+    right var(--open) var(--ease-out);
+}
+
+#page-problem {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  color: #c42b1c;
+}
+
+/* ---------- Recent documents, in the File menu ---------- */
+
+/* The folder, after the name, cut short from the left so its end shows. */
+#recent-list .recent-folder {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+#recent-list .document-name {
+  max-width: 220px;
+}
+
+#file-menu .quiet {
+  color: #555;
+}
+
+/* ---------- Find (Ctrl+F) ---------- */
+
+/* Floats under the toolbar's right-hand end, like the toolbar itself. */
+#find-bar {
+  position: fixed;
+  top: calc(var(--toolbar-bottom) + 6px);
+  right: 16px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--menu-background);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow: var(--menu-shadow);
+  font: 13px var(--ui-font);
+}
+
+#find-bar[hidden] {
+  display: none;
+}
+
+#find-input {
+  width: 200px;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  background: var(--group);
+  color: black;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 13px var(--ui-font);
+  outline: none;
+}
+
+#find-input:hover:not(:focus) {
+  background: var(--group-hover);
+}
+
+#find-input:focus {
+  background: white;
+  border-color: var(--focus);
+}
+
+/* Nothing found: the box turns a soft red. */
+#find-bar.no-results #find-input {
+  background: #fde7e9;
+}
+
+#find-bar.no-results #find-input:focus {
+  border-color: #c42b1c;
+}
+
+#find-count {
+  min-width: 64px;
+  padding: 0 6px;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#find-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  color: black;
+  border: none;
+  border-radius: var(--radius);
+  font: 12px var(--ui-font);
+}
+
+#find-bar button:hover {
+  background: var(--hover);
+}
+
+#find-bar button:active {
+  background: var(--selected);
+}
+
+#find-bar svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Every match, softly; the current one, stronger. */
+.ProseMirror .find-match {
+  background: rgba(255, 200, 0, 0.35);
+  border-radius: 2px;
+}
+
+.ProseMirror .find-current {
+  background: rgba(255, 140, 0, 0.6);
+}
+
+/* ---------- Printing (File > Print, Ctrl+P) ----------
+   Only the document prints, laid out exactly as on screen. Each page's text
+   is a CSS column a page's text area tall; on paper the margins come from the
+   printed page instead of the document's padding, so each column fills one
+   sheet's text area and lines break across pages just where they do on screen.
+   The paper size and margins (@page) are set by src/page.js from the
+   document's page setup. */
+@media print {
+  html,
+  body {
+    height: auto;
+    background: white;
+  }
+
+  body {
+    display: block;
+  }
+
+  /* Printed at once, without waiting for a menu or dialog to fade out. */
+  *,
+  *::before,
+  *::after,
+  ::backdrop {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* The toolbar, menus, dialogs, the reference panel and the text cursor. */
+  body > :not(#workspace),
+  #reference,
+  .text-caret,
+  .desk-snapshot {
+    display: none !important;
+  }
+
+  #workspace,
+  #desk {
+    display: block;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .ProseMirror {
+    width: calc(var(--page-width) - var(--margin-left) - var(--margin-right));
+    margin: 0;
+    padding: 0;
+    row-gap: 0;
+    background: none;
+  }
+
+  /* Marks that are only for editing. */
+  .ProseMirror .spelling-error {
+    text-decoration: none;
+  }
+
+  .ProseMirror .selectedCell,
+  .ProseMirror .find-match {
+    background: none;
+  }
+
+  .ProseMirror-selectednode[data-resize-container] [data-resize-wrapper] {
+    outline: none;
+  }
+
+  .ProseMirror [data-resize-handle],
+  .ProseMirror .column-resize-handle,
+  .ProseMirror-gapcursor {
+    display: none !important;
+  }
 }

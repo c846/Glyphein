@@ -9,6 +9,9 @@ const APP_NAME = 'Glyphein';
 // Right Shift + 1 to 9 switches to that document.
 const SWITCH_KEYS = 9;
 
+const RECENT_KEY = 'glyphein.recentFiles';
+const MAX_RECENT = 10;
+
 const baseName = (path) => path.split(/[\\/]/).pop();
 // Windows paths ignore case and either slash.
 const samePath = (a, b) => a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
@@ -20,9 +23,11 @@ const samePath = (a, b) => a.replace(/\//g, '\\').toLowerCase() === b.replace(/\
 // text, undo history and cursor) and scroll position, and switching swaps
 // that state into the editor. The window title follows the current
 // document, and nothing with unsaved changes is closed without asking.
-// `defaults` is { font, size }: the app's default font and size in points.
+// `getPresets` gives the app's presets (src/presets.js), which set the text's
+// default font and the headings' when saving and opening.
 // `onSwitch` runs just before another document is shown.
-export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} }) {
+// `openPageSetup` opens File > Page setup.
+export function setupFiles(editor, { getPresets, openPageSetup, showMessage, onSwitch = () => {} }) {
   const byId = (id) => document.getElementById(id);
   const desk = byId('desk');
   const documentsButton = byId('documents');
@@ -181,7 +186,7 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
     const doc = current;
     const content = editor.state.doc;
     try {
-      const bytes = await documentToOdt(content, defaults);
+      const bytes = await documentToOdt(content, getPresets());
       let defaultPath = doc.filePath ?? `${nameOf(doc)}.odt`;
       if (copy) defaultPath = defaultPath.replace(/(\.odt)?$/i, ' - Copy.odt');
 
@@ -192,6 +197,7 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
         defaultPath,
       });
       if (!savedPath) return false;
+      remember(savedPath);
       if (!copy) {
         doc.filePath = savedPath;
         doc.untitled = null;
@@ -218,6 +224,103 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
     return choice === 'discard';
   }
 
+  /* ---------- Recent documents ---------- */
+
+  // The files most recently opened or saved, newest first, shown at the foot
+  // of the File menu. Shared by every window, and kept between sessions.
+  const recentSection = byId('recent-section');
+  const recentList = byId('recent-list');
+
+  function loadRecent() {
+    try {
+      const paths = JSON.parse(localStorage.getItem(RECENT_KEY));
+      return Array.isArray(paths) ? paths.filter((path) => typeof path === 'string').slice(0, MAX_RECENT) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRecent(paths) {
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(paths));
+    } catch (error) {
+      console.error(`Could not save the recent documents: ${error.message}`);
+    }
+    renderRecent();
+  }
+
+  function remember(path) {
+    saveRecent([path, ...loadRecent().filter((other) => !samePath(other, path))].slice(0, MAX_RECENT));
+  }
+
+  const forget = (path) => saveRecent(loadRecent().filter((other) => !samePath(other, path)));
+
+  function renderRecent() {
+    const paths = loadRecent();
+    recentSection.hidden = !paths.length;
+    recentList.replaceChildren(
+      ...paths.map((path, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('role', 'menuitem');
+        button.dataset.action = `recent-${index}`;
+        button.title = path;
+
+        const label = document.createElement('span');
+        label.className = 'item-label document-name';
+        const name = document.createElement('span');
+        name.className = 'name-text';
+        name.textContent = baseName(path);
+        label.append(name);
+
+        const folder = document.createElement('span');
+        folder.className = 'shortcut recent-folder';
+        folder.textContent = path.slice(0, path.length - baseName(path).length).replace(/[\\/]$/, '');
+
+        button.append(label, folder);
+        return button;
+      }),
+    );
+  }
+
+  // Another window opened or saved something.
+  window.addEventListener('storage', (event) => {
+    if (event.key === RECENT_KEY) renderRecent();
+  });
+
+  // A file from the list. One that has gone (moved, renamed or deleted) is
+  // taken off it.
+  const openRecent = (path) =>
+    run(async () => {
+      let file;
+      try {
+        file = await window.files.read(path);
+      } catch (error) {
+        forget(path);
+        showMessage(`"${baseName(path)}" could not be opened. It may have been moved, renamed or deleted.\n\n${cleanError(error)}`);
+        return;
+      }
+      await openFile(file);
+    });
+
+  /* ---------- Printing ---------- */
+
+  // File > Print, or Ctrl+P. The page's title names the print job, which is
+  // also what Microsoft Print to PDF suggests as the file name, so for the
+  // moment it's just the document's name.
+  async function print() {
+    const title = document.title;
+    document.title = nameOf(current).replace(/\.odt$/i, '');
+    try {
+      const failure = await window.files.print();
+      if (failure) showMessage(`The document could not be printed.\n\n${failure}`);
+    } catch (error) {
+      showMessage(`The document could not be printed.\n\n${cleanError(error)}`);
+    } finally {
+      document.title = title;
+    }
+  }
+
   /* ---------- Opening and closing ---------- */
 
   // Opens `file` ({ path, bytes }) as another document, or switches to it if
@@ -226,13 +329,14 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
   async function openFile(file) {
     const open = documents.find((doc) => doc.filePath && samePath(doc.filePath, file.path));
     if (open) {
+      remember(open.filePath);
       show(open);
       return true;
     }
 
     let state;
     try {
-      const content = await odtToDocument(file.bytes, defaults);
+      const content = await odtToDocument(file.bytes, getPresets());
       const node = editor.schema.nodeFromJSON(content);
       node.check();
       state = freshState(node);
@@ -242,6 +346,7 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
     }
 
     const doc = newDocument(state, file.path);
+    remember(file.path);
     if (isBlank(current)) {
       const blank = current;
       documents.splice(documents.indexOf(blank), 1, doc);
@@ -331,23 +436,35 @@ export function setupFiles(editor, { defaults, showMessage, onSwitch = () => {} 
     open,
     save: () => run(() => save()),
     'save-copy': () => run(() => save({ copy: true })),
+    'page-setup': openPageSetup,
+    print: () => run(print),
     close,
+    'clear-recent': () => saveRecent([]),
   };
 
-  const { close: closeFileMenu } = dropdown(byId('file'), byId('file-menu'), (action) => actions[action]());
+  const { close: closeFileMenu } = dropdown(byId('file'), byId('file-menu'), (action) => {
+    const recent = /^recent-(\d+)$/.exec(action);
+    if (recent) {
+      const path = loadRecent()[Number(recent[1])];
+      if (path) openRecent(path);
+    } else {
+      actions[action]();
+    }
+  });
+  renderRecent();
   const { close: closeDocumentsMenu } = dropdown(documentsButton, documentsMenu, (action) => {
     const number = /^switch-(\d+)$/.exec(action);
     if (number) showNumber(Number(number[1]));
     else actions[action]();
   });
 
-  // Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+W.
+  // Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+P, Ctrl+W.
   document.addEventListener('keydown', (event) => {
     if (!event.ctrlKey || event.altKey || document.querySelector('dialog[open]')) return;
     const key = event.key.toLowerCase();
     const action = event.shiftKey
       ? { s: 'save-copy' }[key]
-      : { n: 'new', o: 'open', s: 'save', w: 'close' }[key];
+      : { n: 'new', o: 'open', s: 'save', p: 'print', w: 'close' }[key];
     if (!action) return;
     event.preventDefault();
     closeFileMenu();

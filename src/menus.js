@@ -32,12 +32,18 @@ export function dropdown(button, menu, onChoose) {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
   };
-  const open = () => {
+  // Beneath the button, or at (x, y) when opened from elsewhere, such as the
+  // right-click menu.
+  const openAt = (x, y) => {
     for (const other of dropdowns) other.close();
+    closeContextMenu();
     menu.hidden = false;
-    const rect = button.getBoundingClientRect();
-    placeOnScreen(menu, rect.left, rect.bottom + DROPDOWN_GAP);
+    placeOnScreen(menu, x, y);
     button.setAttribute('aria-expanded', 'true');
+  };
+  const open = () => {
+    const rect = button.getBoundingClientRect();
+    openAt(rect.left, rect.bottom + DROPDOWN_GAP);
   };
 
   button.addEventListener('click', () => (menu.hidden ? open() : close()));
@@ -50,7 +56,7 @@ export function dropdown(button, menu, onChoose) {
     onChoose(action);
   });
 
-  const entry = { button, menu, close };
+  const entry = { button, menu, close, openAt };
   dropdowns.push(entry);
   return entry;
 }

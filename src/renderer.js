@@ -1,6 +1,4 @@
 import { Editor } from '@tiptap/core';
-import Document from '@tiptap/extension-document';
-import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import Bold from '@tiptap/extension-bold';
 import Italic from '@tiptap/extension-italic';
@@ -10,15 +8,29 @@ import { Gapcursor, TrailingNode, UndoRedo } from '@tiptap/extensions';
 import { Selection } from '@tiptap/pm/state';
 import { isInTable } from '@tiptap/pm/tables';
 import { alignmentExtension, currentAlignment, setAlignment } from './alignment.js';
+import { FontMemory } from './font-memory.js';
 import { ThickCaret } from './caret.js';
+import { Find, setupFind } from './find.js';
 import { BULLET_SYMBOLS, bulletExtensions, setBulletSymbol } from './bullets.js';
 import { setupFiles } from './files.js';
 import { imageExtensions, insertImageFiles } from './images.js';
 import { closeContextMenu, closeMenusOnEscape, dropdown, openContextMenu, placeOnScreen } from './menus.js';
+import { PageDocument, setupPageDialog } from './page.js';
 import './pages.js'; // Ctrl+Down and Ctrl+Up flip through pages
+import {
+  PRESET_LABELS,
+  PresetParagraph,
+  currentPreset,
+  getPresets,
+  lockedStyles,
+  onPresetsChange,
+  presetFormat,
+  setupPresets,
+} from './presets.js';
 import { setupReference } from './reference.js';
 import { MAX_SPACE, currentSpacing, setSpacing, setTableSpacing, spacingExtension } from './spacing.js';
 import { Speller, Spellcheck, wordAt } from './spellcheck.js';
+import { TabKey } from './tab.js';
 import {
   MAX_TABLE_COLS,
   addColumn,
@@ -31,10 +43,6 @@ import {
   tableExtensions,
   toggleStyle,
 } from './tables.js';
-
-// Keep in sync with the .ProseMirror rule in style.css.
-const DEFAULT_FONT = 'Times New Roman';
-const DEFAULT_SIZE = 12;
 
 const MAX_TABLE_ROWS = 100;
 const MAX_SPLIT_ROWS = 20;
@@ -54,8 +62,8 @@ const speller = new Speller();
 const editor = new Editor({
   element: byId('document'),
   extensions: [
-    Document,
-    Paragraph,
+    PageDocument, // Each document's page setup: paper size and margins
+    PresetParagraph, // Each paragraph's preset: Standard, Title or a heading
     Text,
     Bold, // Ctrl+B
     Italic, // Ctrl+I
@@ -63,6 +71,7 @@ const editor = new Editor({
     TextStyle,
     FontFamily,
     FontSize,
+    FontMemory, // New text keeps the chosen font and size, even on empty lines and when pasted
     UndoRedo,
     TrailingNode, // Always leaves a line to type on after a table
     Gapcursor, // Lets the cursor sit before a table or between two tables
@@ -73,6 +82,8 @@ const editor = new Editor({
     alignmentExtension, // Ctrl+L, Ctrl+E, Ctrl+R, Ctrl+J
     spacingExtension, // Ctrl+1, Ctrl+5, Ctrl+2
     ThickCaret,
+    Find, // Ctrl+F
+    TabKey, // Tab types a tab
   ],
   // Turns off Markdown-style auto-formatting such as **bold**.
   enableInputRules: false,
@@ -86,30 +97,44 @@ const editor = new Editor({
   autofocus: true,
 });
 
-// The formatting at the cursor, or of the selected cells.
+// The formatting at the cursor, or of the selected cells. What the text
+// doesn't set itself comes from its paragraph's preset.
 function currentFormat() {
-  if (isCellSelection(editor.state)) return selectedCellsFormat(editor.state);
+  const preset = presetFormat(currentPreset(editor.state));
+  if (isCellSelection(editor.state)) {
+    const format = selectedCellsFormat(editor.state);
+    return { ...format, fontFamily: format.fontFamily ?? preset.font, fontSize: format.fontSize ?? `${preset.size}pt` };
+  }
+  const { fontFamily, fontSize } = editor.getAttributes('textStyle');
   return {
-    ...editor.getAttributes('textStyle'),
-    bold: editor.isActive('bold'),
-    italic: editor.isActive('italic'),
-    underline: editor.isActive('underline'),
+    fontFamily: fontFamily ?? preset.font,
+    fontSize: fontSize ?? `${preset.size}pt`,
+    bold: editor.isActive('bold') || preset.bold,
+    italic: editor.isActive('italic') || preset.italic,
+    underline: editor.isActive('underline') || preset.underline,
   };
 }
+
+let presets = null; // The Preset button and menu, once set up.
 
 // Makes the toolbar show the formatting at the cursor.
 function syncToolbar() {
   const format = currentFormat();
 
-  fontSelect.value = (format.fontFamily ?? DEFAULT_FONT).replace(/["']/g, '');
+  fontSelect.value = format.fontFamily.replace(/["']/g, '');
 
   // Don't overwrite a number while it's being typed.
-  if (document.activeElement !== sizeInput) {
-    sizeInput.value = format.fontSize ? parseFloat(format.fontSize) : DEFAULT_SIZE;
-  }
+  if (document.activeElement !== sizeInput) sizeInput.value = parseFloat(format.fontSize);
 
+  presets?.sync();
+
+  // A style the paragraph's preset already sets can't be changed here: its
+  // button is greyed out and struck through.
+  const locked = lockedStyles(editor.state);
   for (const [name, button] of Object.entries(styleButtons)) {
-    button.setAttribute('aria-pressed', format[name]);
+    button.disabled = locked[name];
+    button.classList.toggle('locked', locked[name]);
+    button.setAttribute('aria-pressed', !locked[name] && format[name]);
   }
 
   // The Alignment button shows the current alignment's icon, and its menu ticks it.
@@ -135,7 +160,9 @@ async function loadFonts() {
     byId('toolbar').addEventListener('mouseenter', loadFonts, { once: true });
   }
 
-  const unique = [...new Set([DEFAULT_FONT, ...families])];
+  // The presets' fonts are always listed, even if they aren't installed.
+  const presetFonts = Object.values(getPresets()).map((preset) => preset.font);
+  const unique = [...new Set([...presetFonts, ...families])];
   unique.sort((a, b) => a.localeCompare(b));
   fontSelect.replaceChildren(
     ...unique.map((family) => {
@@ -303,14 +330,27 @@ function moveCursorForMenu(event) {
   return hit.pos;
 }
 
-// The menu's own items, which depend on what was clicked.
-function pageMenuItems({ onImage }) {
+// The menu's own items, which depend on what was clicked. `point` is where
+// the menu opens, and `word` the word clicked, if any.
+function pageMenuItems({ onImage, point, word }) {
   const { state } = editor;
   const inTable = isInTable(state);
   const onText = !onImage && state.selection.$from.parent.isTextblock;
   const inBullet = editor.isActive('bulletList');
 
   return [
+    {
+      label: 'Find…',
+      shortcut: 'Ctrl+F',
+      // The selected text if there is some, otherwise the word clicked.
+      action: () => find.open(state.selection.empty ? word : null),
+    },
+    {
+      label: 'Preset',
+      shortcut: `${PRESET_LABELS[currentPreset(state)]} ▸`,
+      action: () => presets.openMenuAt(point.x, point.y),
+    },
+    'separator',
     // A table can't go inside another table.
     { label: 'Insert Table…', action: createTable, disabled: inTable },
     ...(inTable
@@ -362,7 +402,8 @@ editor.view.dom.addEventListener('contextmenu', async (event) => {
   const wordItems = range ? await reference.wordMenuItems(range) : [];
   if (request !== menuRequest) return;
 
-  openContextMenu([...wordItems, 'separator', ...pageMenuItems({ onImage })], x, y);
+  const word = range ? editor.state.doc.textBetween(range.from, range.to) : null;
+  openContextMenu([...wordItems, 'separator', ...pageMenuItems({ onImage, point: { x, y }, word })], x, y);
 });
 // A new right-click supersedes a lookup still under way for the last one.
 document.addEventListener('mousedown', () => menuRequest++, true);
@@ -437,8 +478,16 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && closeMenusOnEscape()) editor.commands.focus();
 });
 
+const find = setupFind(editor);
+presets = setupPresets(editor, { fontSelect });
+// A preset that changed may be the one at the cursor.
+onPresetsChange(syncToolbar);
+
+const pageDialog = setupPageDialog(editor);
+
 setupFiles(editor, {
-  defaults: { font: DEFAULT_FONT, size: DEFAULT_SIZE },
+  getPresets,
+  openPageSetup: pageDialog.open,
   showMessage,
   // Menus pointing into the old document mustn't act on the next one.
   // (Not closeBulletMenu, whose focus() would scroll the old document.)
@@ -446,6 +495,7 @@ setupFiles(editor, {
     bulletMenu.hidden = true;
     bulletMenuPos = null;
     closeContextMenu();
+    find.close({ focus: false });
   },
 });
 
